@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoDev — Projets</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { mono: ['JetBrains Mono', 'monospace'], sans: ['DM Sans', 'sans-serif'] },
+          colors: {
+            surface: { 0: '#09090b', 1: '#0f0f12', 2: '#18181b', 3: '#1e1e22', 4: '#27272a' },
+            accent: { DEFAULT: '#6366f1', light: '#818cf8', dim: '#4f46e5' },
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    body { background: #09090b; color: #e4e4e7; font-family: 'DM Sans', sans-serif; }
+    .grid-bg {
+      background-image: linear-gradient(rgba(99,102,241,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(99,102,241,0.03) 1px, transparent 1px);
+      background-size: 48px 48px;
+    }
+    .glow-border { box-shadow: 0 0 0 1px rgba(99,102,241,0.15), 0 0 20px -5px rgba(99,102,241,0.1); }
+    .row-hover:hover { background: rgba(99,102,241,0.04); }
+
+    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; font-family: 'JetBrains Mono', monospace; }
+    .badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; }
+    .badge-idle { background: rgba(113,113,122,0.15); color: #a1a1aa; }
+    .badge-idle::before { background: #71717a; }
+    .badge-running { background: rgba(245,158,11,0.15); color: #fcd34d; }
+    .badge-running::before { background: #f59e0b; }
+    .badge-completed { background: rgba(34,197,94,0.15); color: #86efac; }
+    .badge-completed::before { background: #22c55e; }
+    .badge-failed { background: rgba(239,68,68,0.15); color: #fca5a5; }
+    .badge-failed::before { background: #ef4444; }
+
+    @keyframes gen-pulse { 0%,100% { opacity: 0.5; } 50% { opacity: 1; } }
+    .gen-pulse { animation: gen-pulse 2s ease-in-out infinite; }
+
+    .nav-link { color: #71717a; text-decoration: none; font-size: 14px; font-weight: 500; transition: color 0.15s; padding: 8px 12px; border-radius: 6px; }
+    .nav-link:hover { color: #e4e4e7; background: rgba(99,102,241,0.06); }
+    .nav-link.active { color: #a5b4fc; background: rgba(99,102,241,0.1); }
+
+    .btn-primary { background: #6366f1; color: white; padding: 10px 20px; border-radius: 8px; font-weight: 600; font-size: 14px; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: all 0.15s; text-decoration: none; }
+    .btn-primary:hover { background: #4f46e5; box-shadow: 0 0 20px -5px rgba(99,102,241,0.4); }
+    .btn-secondary { background: transparent; color: #a1a1aa; padding: 8px 16px; border-radius: 8px; font-weight: 500; font-size: 13px; border: 1px solid #27272a; cursor: pointer; transition: all 0.15s; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+    .btn-secondary:hover { border-color: #3f3f46; color: #e4e4e7; }
+
+    .th-cell { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: #52525b; padding: 12px 16px; border-bottom: 1px solid #27272a; text-align: left; }
+    .td-cell { padding: 16px; border-bottom: 1px solid rgba(39,39,42,0.5); }
+    .stat-card { background: #0f0f12; border: 1px solid #1e1e22; border-radius: 12px; padding: 20px 24px; }
+
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-in { animation: fadeInUp 0.4s ease-out both; }
+    .delay-1 { animation-delay: 0.05s; }
+    .delay-2 { animation-delay: 0.1s; }
+    .delay-3 { animation-delay: 0.15s; }
+    .delay-4 { animation-delay: 0.2s; }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 3px; }
+
+    .pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; position: relative; }
+    .pulse-dot::after { content: ''; position: absolute; inset: -3px; border-radius: 50%; background: rgba(34,197,94,0.3); animation: ping 2s ease-in-out infinite; }
+    @keyframes ping { 0%,100% { opacity: 0; transform: scale(1); } 50% { opacity: 1; transform: scale(1.3); } }
+  </style>
+</head>
+<body class="grid-bg min-h-screen">
+
+  <header class="sticky top-0 z-50 border-b border-surface-3" style="background: rgba(9,9,11,0.85); backdrop-filter: blur(12px);">
+    <div class="max-w-[1400px] mx-auto px-6 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-8">
+        <a href="index.html" class="flex items-center gap-3 text-white no-underline">
+          <div class="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+          </div>
+          <span class="font-mono font-bold text-lg tracking-tight">AutoDev</span>
+        </a>
+        <nav class="flex items-center gap-1">
+          <a href="index.html" class="nav-link active">Projets</a>
+        </nav>
+      </div>
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2 text-xs font-mono text-zinc-500">
+          <div class="pulse-dot"></div>
+          Polling actif
+        </div>
+        <div class="text-xs font-mono text-zinc-600">v0.1.0-poc</div>
+        <div class="w-8 h-8 rounded-full bg-surface-3 flex items-center justify-center text-xs font-mono font-bold text-zinc-400">NC</div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-[1400px] mx-auto px-6 py-8">
+
+    <div class="flex items-center justify-between mb-8 animate-in">
+      <div>
+        <h1 class="text-2xl font-bold text-white mb-1">Projets</h1>
+        <p class="text-sm text-zinc-500">Projets connectés à ProdPlanner — tickets traités automatiquement</p>
+      </div>
+      <button class="btn-secondary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+        Connecter un projet
+      </button>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-4 gap-4 mb-8">
+      <div class="stat-card animate-in delay-1">
+        <div class="text-xs font-mono uppercase tracking-widest text-zinc-600 mb-2">Projets actifs</div>
+        <div class="text-3xl font-bold text-white font-mono">3</div>
+      </div>
+      <div class="stat-card animate-in delay-2">
+        <div class="text-xs font-mono uppercase tracking-widest text-zinc-600 mb-2">Tickets traités</div>
+        <div class="text-3xl font-bold text-emerald-400 font-mono">28</div>
+      </div>
+      <div class="stat-card animate-in delay-3">
+        <div class="text-xs font-mono uppercase tracking-widest text-zinc-600 mb-2">En cours</div>
+        <div class="text-3xl font-bold text-amber-400 font-mono">1</div>
+      </div>
+      <div class="stat-card animate-in delay-4">
+        <div class="text-xs font-mono uppercase tracking-widest text-zinc-600 mb-2">Échoués</div>
+        <div class="text-3xl font-bold text-red-400 font-mono">2</div>
+      </div>
+    </div>
+
+    <!-- Projects -->
+    <div class="space-y-4 animate-in delay-3">
+
+      <!-- Project card: Dispoo -->
+      <a href="project-detail.html" class="block rounded-xl border border-surface-3 overflow-hidden transition-all hover:border-surface-4 no-underline" style="background: #0c0c0f;">
+        <div class="p-6">
+          <div class="flex items-start justify-between">
+            <div class="flex-1">
+              <div class="flex items-center gap-3 mb-2">
+                <h2 class="text-lg font-bold text-white">Dispoo</h2>
+                <span class="badge badge-running gen-pulse">1 en cours</span>
+              </div>
+              <p class="text-sm text-zinc-500 mb-4">SaaS de prise de rendez-vous en ligne pour prestataires de services</p>
+              <div class="flex items-center gap-6 text-xs">
+                <span class="flex items-center gap-2 text-zinc-500">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
+                  <span class="font-mono">outlined/dispoo</span>
+                </span>
+                <span class="text-zinc-600">·</span>
+                <span class="text-zinc-500 font-mono">ProdPlanner #13</span>
+                <span class="text-zinc-600">·</span>
+                <span class="text-zinc-500">Dernier poll : il y a 45s</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-6 ml-8">
+              <div class="grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <div class="text-xl font-bold font-mono text-emerald-400">18</div>
+                  <div class="text-[10px] font-mono text-zinc-600 uppercase">Terminés</div>
+                </div>
+                <div>
+                  <div class="text-xl font-bold font-mono text-amber-400">1</div>
+                  <div class="text-[10px] font-mono text-zinc-600 uppercase">En cours</div>
+                </div>
+                <div>
+                  <div class="text-xl font-bold font-mono text-red-400">1</div>
+                  <div class="text-[10px] font-mono text-zinc-600 uppercase">Échoué</div>
+                </div>
+              </div>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3f3f46" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </div>
+          </div>
+        </div>
+        <!-- Active generation bar -->
+        <div class="border-t border-surface-3 px-6 py-3 flex items-center gap-3" style="background: rgba(245,158,11,0.03);">
+          <div class="w-1.5 h-1.5 rounded-full bg-amber-400 gen-pulse"></div>
+          <span class="text-xs text-amber-300/80 font-mono">DISP-385</span>
+          <span class="text-xs text-zinc-500">Télécharger les icônes de services</span>
+          <span class="text-xs text-zinc-600 ml-auto font-mono">1m23s</span>
+        </div>
+      </a>
+
+      <!-- Project card: CRM Granit -->
+      <a href="project-detail.html" class="block rounded-xl border border-surface-3 overflow-hidden transition-all hover:border-surface-4 no-underline" style="background: #0c0c0f;">
+        <div class="p-6">
+          <div class="flex items-start justify-between">
+            <div class="flex-1">
+              <div class="flex items-center gap-3 mb-2">
+                <h2 class="text-lg font-bold text-white">CRM Granit</h2>
+                <span class="badge badge-idle">Inactif</span>
+              </div>
+              <p class="text-sm text-zinc-500 mb-4">CRM pour entreprise de pose de pierre naturelle</p>
+              <div class="flex items-center gap-6 text-xs">
+                <span class="flex items-center gap-2 text-zinc-500">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
+                  <span class="font-mono">outlined/crm-granit</span>
+                </span>
+                <span class="text-zinc-600">·</span>
+                <span class="text-zinc-500 font-mono">ProdPlanner #10</span>
+                <span class="text-zinc-600">·</span>
+                <span class="text-zinc-500">Dernier poll : il y a 58s</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-6 ml-8">
+              <div class="grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <div class="text-xl font-bold font-mono text-emerald-400">8</div>
+                  <div class="text-[10px] font-mono text-zinc-600 uppercase">Terminés</div>
+                </div>
+                <div>
+                  <div class="text-xl font-bold font-mono text-zinc-600">0</div>
+                  <div class="text-[10px] font-mono text-zinc-600 uppercase">En cours</div>
+                </div>
+                <div>
+                  <div class="text-xl font-bold font-mono text-red-400">1</div>
+                  <div class="text-[10px] font-mono text-zinc-600 uppercase">Échoué</div>
+                </div>
+              </div>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3f3f46" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </div>
+          </div>
+        </div>
+      </a>
+
+      <!-- Project card: LeadsMarket -->
+      <a href="#" class="block rounded-xl border border-surface-3 overflow-hidden transition-all hover:border-surface-4 no-underline" style="background: #0c0c0f;">
+        <div class="p-6">
+          <div class="flex items-start justify-between">
+            <div class="flex-1">
+              <div class="flex items-center gap-3 mb-2">
+                <h2 class="text-lg font-bold text-white">LeadsMarket</h2>
+                <span class="badge badge-idle">Inactif</span>
+              </div>
+              <p class="text-sm text-zinc-500 mb-4">Marketplace de leads qualifiés pour courtiers</p>
+              <div class="flex items-center gap-6 text-xs">
+                <span class="flex items-center gap-2 text-zinc-500">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
+                  <span class="font-mono">outlined/leadsmarket</span>
+                </span>
+                <span class="text-zinc-600">·</span>
+                <span class="text-zinc-500 font-mono">ProdPlanner #15</span>
+                <span class="text-zinc-600">·</span>
+                <span class="text-zinc-500">Dernier poll : il y a 32s</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-6 ml-8">
+              <div class="grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <div class="text-xl font-bold font-mono text-emerald-400">2</div>
+                  <div class="text-[10px] font-mono text-zinc-600 uppercase">Terminés</div>
+                </div>
+                <div>
+                  <div class="text-xl font-bold font-mono text-zinc-600">0</div>
+                  <div class="text-[10px] font-mono text-zinc-600 uppercase">En cours</div>
+                </div>
+                <div>
+                  <div class="text-xl font-bold font-mono text-zinc-600">0</div>
+                  <div class="text-[10px] font-mono text-zinc-600 uppercase">Échoué</div>
+                </div>
+              </div>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3f3f46" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </div>
+          </div>
+        </div>
+      </a>
+
+    </div>
+  </main>
+
+</body>
+</html>

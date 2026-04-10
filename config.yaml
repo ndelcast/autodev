@@ -1,0 +1,33 @@
+prodplanner:
+  base_url: "https://prodplanner.outlined.io/api"
+  client_id: "${PRODPLANNER_CLIENT_ID}"
+  client_secret: "${PRODPLANNER_CLIENT_SECRET}"
+
+claude:
+  model: "sonnet"
+  max_turns: 30
+  timeout: "10m"
+
+polling:
+  interval: "60s"
+
+docker:
+  network_mode: "host"
+  max_concurrent: 3
+
+workspace_base_path: "./workspaces"
+web_port: 8080
+db_path: "./autodev.db"
+skills_dir: "./skills"
+contexts_dir: "./contexts"
+
+projects:
+  - name: "Dispoo"
+    slug: "dispoo"
+    prodplanner_project_id: 13
+    github_repo: "outlined/dispoo"
+    docker_image: "autodev-laravel:latest"
+    context_file: "dispoo.md"
+    skills: ["laravel", "data-modeling"]
+    autodev_developer_id: 3
+    done_column_id: 43

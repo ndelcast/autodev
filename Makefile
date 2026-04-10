@@ -1,41 +1,28 @@
-# Template Laravel Filament
+GO := /opt/homebrew/bin/go
+BINARY := autodev
 
-.PHONY: help init fresh seed migrate test lint fix clear
+.PHONY: build test lint clean docker-laravel docker-base docker-node docker-all
 
-help:
-	@echo "Commandes disponibles:"
-	@echo "  make init     - Initialiser le template pour un nouveau projet"
-	@echo "  make fresh    - Reset DB + seeders"
-	@echo "  make seed     - Lancer les seeders"
-	@echo "  make migrate  - Lancer les migrations"
-	@echo "  make test     - Lancer les tests"
-	@echo "  make lint     - Verifier code style"
-	@echo "  make fix      - Corriger code style"
-	@echo "  make clear    - Vider les caches"
-
-init:
-	@bash scripts/init.sh
-
-fresh:
-	vendor/bin/sail artisan migrate:fresh --seed
-
-seed:
-	vendor/bin/sail artisan db:seed
-
-migrate:
-	vendor/bin/sail artisan migrate
+build:
+	$(GO) build -o $(BINARY) .
 
 test:
-	vendor/bin/sail artisan test --compact
+	$(GO) test ./...
 
 lint:
-	vendor/bin/sail bin pint --test
+	$(GO) vet ./...
 
-fix:
-	vendor/bin/sail bin pint
+docker-laravel:
+	docker build -t autodev-laravel images/laravel/
 
-clear:
-	vendor/bin/sail artisan config:clear
-	vendor/bin/sail artisan route:clear
-	vendor/bin/sail artisan view:clear
-	vendor/bin/sail artisan cache:clear
+docker-base:
+	docker build -t autodev-base images/base/
+
+docker-node:
+	docker build -t autodev-node images/node/
+
+docker-all: docker-laravel docker-base docker-node
+
+clean:
+	rm -f $(BINARY)
+	rm -f autodev.db autodev.db-wal autodev.db-shm
