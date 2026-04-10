@@ -1,0 +1,19 @@
+{
+    "mcpServers": {
+        "laravel-boost": {
+            "command": "vendor/bin/sail",
+            "args": [
+                "artisan",
+                "boost:mcp"
+            ]
+        },
+        "prodplanner": {
+            "type": "http",
+            "url": "https://prodplanner.outlined.io/mcp",
+            "headers": {
+                "X-Client-Id": "${PRODPLANNER_CLIENT_ID}",
+                "X-Client-Secret": "${PRODPLANNER_CLIENT_SECRET}"
+            }
+        }
+    }
+}
