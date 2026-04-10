@@ -456,9 +456,7 @@ func (s *Server) handleProjectDelete(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) listDockerImages() []string {
 	return []string{
-		"autodev-laravel:latest",
-		"autodev-node:latest",
-		"autodev-base:latest",
+		"autodev-runner:latest",
 	}
 }
 

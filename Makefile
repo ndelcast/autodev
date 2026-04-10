@@ -1,7 +1,7 @@
 GO := /opt/homebrew/bin/go
 BINARY := autodev
 
-.PHONY: build test lint clean docker-laravel docker-base docker-node docker-all
+.PHONY: build test lint clean docker
 
 build:
 	$(GO) build -o $(BINARY) .
@@ -12,16 +12,8 @@ test:
 lint:
 	$(GO) vet ./...
 
-docker-laravel:
-	docker build -t autodev-laravel images/laravel/
-
-docker-base:
-	docker build -t autodev-base images/base/
-
-docker-node:
-	docker build -t autodev-node images/node/
-
-docker-all: docker-laravel docker-base docker-node
+docker:
+	docker build -t autodev-runner images/
 
 clean:
 	rm -f $(BINARY)
