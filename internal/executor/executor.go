@@ -66,15 +66,27 @@ func (e *Executor) Process(ctx context.Context, gen *store.Generation) error {
 	}
 	log.Info("ticket fetched", "title", ticket.Title, "type", ticket.Type, "size", ticket.Size)
 
-	// 4. Build prompt
-	log.Info("building prompt", "has_context", project.ContextContent != "", "has_skills", project.SkillsContent != "")
-	promptText, err := e.prompt.Build(project, ticket)
+	// 4. Ensure workspace
+	log.Info("ensuring workspace exists", "repo", project.GithubRepo)
+	workspacePath, err := e.ensureWorkspace(project)
 	if err != nil {
-		return e.failGeneration(gen, startedAt, "building prompt: %v", err)
+		return e.failGeneration(gen, startedAt, "preparing workspace: %v", err)
 	}
+	log.Info("workspace ready", "path", workspacePath)
+
+	// 5. Write CLAUDE.md into workspace (context + skills — loaded automatically by Claude Code)
+	claudeMD := e.prompt.BuildClaudeMD(project)
+	claudeMDPath := filepath.Join(workspacePath, "CLAUDE.md")
+	if err := os.WriteFile(claudeMDPath, []byte(claudeMD), 0644); err != nil {
+		return e.failGeneration(gen, startedAt, "writing CLAUDE.md: %v", err)
+	}
+	log.Info("CLAUDE.md written", "path", claudeMDPath, "length", len(claudeMD))
+
+	// 6. Build lean prompt (ticket only — context is in CLAUDE.md)
+	promptText := e.prompt.BuildPrompt(ticket)
 	log.Info("prompt built", "length", len(promptText))
 
-	// 5. Create temp directory for prompt and output
+	// 7. Create temp directory for prompt and output
 	tmpDir, err := os.MkdirTemp("", fmt.Sprintf("autodev-gen-%d-", gen.ID))
 	if err != nil {
 		return e.failGeneration(gen, startedAt, "creating temp dir: %v", err)
@@ -84,7 +96,7 @@ func (e *Executor) Process(ctx context.Context, gen *store.Generation) error {
 	outputDir := filepath.Join(tmpDir, "output")
 	os.MkdirAll(outputDir, 0755)
 
-	// Write prompt
+	// Write prompt file
 	promptFile := filepath.Join(tmpDir, "prompt.md")
 	if err := os.WriteFile(promptFile, []byte(promptText), 0644); err != nil {
 		return e.failGeneration(gen, startedAt, "writing prompt: %v", err)
@@ -97,15 +109,7 @@ func (e *Executor) Process(ctx context.Context, gen *store.Generation) error {
 		return e.failGeneration(gen, startedAt, "writing PR body: %v", err)
 	}
 
-	// 6. Ensure workspace
-	log.Info("ensuring workspace exists", "repo", project.GithubRepo)
-	workspacePath, err := e.ensureWorkspace(project)
-	if err != nil {
-		return e.failGeneration(gen, startedAt, "preparing workspace: %v", err)
-	}
-	log.Info("workspace ready", "path", workspacePath)
-
-	// 7. Build branch name
+	// 8. Build branch name
 	branchName := buildBranchName(ticket.FormattedNumber, ticket.Title)
 	gen.BranchName = branchName
 	gen.PromptSent = promptText
