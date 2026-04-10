@@ -1,71 +1,56 @@
-# [PROJECT_NAME] Claude Code Instructions
+# AutoDev — Claude Code Instructions
 
-## Git Workflow (OBLIGATOIRE)
+## Project Overview
 
-### Branch Naming Convention
-
-```
-feat/[PREFIX]-XXX/short-description
-fix/[PREFIX]-XXX/short-description
-refactor/[PREFIX]-XXX/short-description
-```
-
-### PR Creation Process
-
-1. **Create branch** from `develop`:
-   ```bash
-   git checkout develop && git pull
-   git checkout -b feat/[PREFIX]-XXX/description
-   ```
-
-2. **Commit format**:
-   ```
-   feat(scope): description
-
-   Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
-   ```
-
-3. **Create PR** with `gh pr create`:
-   ```bash
-   gh pr create --base develop --title "feat([PREFIX]-XXX): Title" --body "..."
-   ```
-
----
+Go-based orchestrator that polls ProdPlanner for tickets, launches ephemeral Docker containers with Claude Code CLI, and creates GitHub PRs.
 
 ## Tech Stack
 
-- Laravel 12 + Inertia.js v3
-- Vue 3 + PrimeVue (Aura theme) + Tailwind CSS v4
-- MySQL via Laravel Sail
+- Go 1.23+ (binary at `/opt/homebrew/bin/go`)
+- SQLite via `modernc.org/sqlite` (pure Go, no CGO)
+- Docker SDK (`github.com/docker/docker`)
+- YAML config (`gopkg.in/yaml.v3`)
+- HTMX + html/template + Tailwind CSS (dashboard)
+
+## Build & Test
+
+```bash
+make build        # Build binary
+make test         # Run all tests
+make lint         # Run go vet
+make docker-all   # Build all Docker images
+make clean        # Remove binary + DB
+```
+
+**IMPORTANT**: Use `/opt/homebrew/bin/go` instead of `go` — a shell function overrides the Go binary on this machine.
 
 ## Code Conventions
 
 - **Code in English** — variables, methods, classes, comments
-- **UI in French** — labels, error messages, button text
+- **UI in French** — labels, dashboard text
+- Structured logging with `log/slog`
+- `flag.NewFlagSet` per CLI subcommand (no external CLI framework)
+- Interfaces for testability (`Processor`, `TicketClient`)
+- Tests use in-memory SQLite (`:memory:`) and `httptest`
 
-## Quick Reference
-
-### Run Commands via Sail
-
-```bash
-vendor/bin/sail artisan migrate
-vendor/bin/sail artisan test --compact
-vendor/bin/sail bin pint --dirty
-```
-
-### Makefile
+## Project Structure
 
 ```
-make fresh / make seed / make migrate / make test / make lint / make fix / make clear
+config/             Config loading (YAML + env expansion)
+internal/store/     SQLite persistence (projects, generations)
+internal/prodplanner/  ProdPlanner API client (OAuth2)
+internal/executor/  Docker runner + prompt builder
+internal/scheduler/ FIFO queue + semaphore + per-project lock
+internal/poller/    Ticker-based ProdPlanner polling
+internal/web/       HTMX dashboard (Phase 3)
+images/             Docker images (laravel, node, base)
+skills/             Skill markdown files for prompts
+contexts/           Project context files for prompts
+docs/               Architecture docs + prototypes
 ```
 
----
+## Git Workflow
 
-## ProdPlanner MCP
-
-Project ID: [PRODPLANNER_ID]
-
-If MCP connection fails with "No session" error:
-1. Check environment variables: `PRODPLANNER_CLIENT_ID`, `PRODPLANNER_CLIENT_SECRET`
-2. These must be exported in shell, not just in `.env`
-3. Restart Claude Code to reinitialize connection
+- Branch from `main`
+- Branch naming: `feat/short-description`, `fix/short-description`
+- Commit format: `feat(scope): description`

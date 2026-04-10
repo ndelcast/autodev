@@ -1,0 +1,15 @@
+services:
+  autodev:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./workspaces:/app/workspaces
+      - ./autodev.db:/app/autodev.db
+    env_file:
+      - .env
+    environment:
+      - AUTODEV_CONFIG=/app/config.yaml
+      - LOG_LEVEL=info
+    restart: unless-stopped

@@ -1,0 +1,87 @@
+{{define "generation_rows"}}
+{{range .}}
+<tr class="border-b border-surface-3/50 row-hover">
+  <td class="px-5 py-3">
+    <div class="font-mono text-xs text-accent-light">{{.TicketNumber}}</div>
+    <div class="text-zinc-300 text-sm mt-0.5">{{truncate .TicketTitle 50}}</div>
+  </td>
+  <td class="px-5 py-3 text-center">
+    <span class="badge {{statusClass .Status}} {{if eq .Status "running"}}gen-pulse{{end}}">{{.Status}}</span>
+  </td>
+  <td class="px-5 py-3">
+    {{if .BranchName}}
+    <span class="font-mono text-xs text-zinc-400">{{truncate .BranchName 35}}</span>
+    {{else}}
+    <span class="text-zinc-600">—</span>
+    {{end}}
+  </td>
+  <td class="px-5 py-3">
+    {{if .PRUrl}}
+    <a href="{{.PRUrl}}" target="_blank" class="font-mono text-xs text-accent hover:text-accent-light underline">Voir PR</a>
+    {{else}}
+    <span class="text-zinc-600">—</span>
+    {{end}}
+  </td>
+  <td class="px-5 py-3 text-center font-mono text-xs text-zinc-400">
+    {{if gt .DurationSeconds 0}}{{.DurationSeconds}}s{{else}}—{{end}}
+  </td>
+  <td class="px-5 py-3 text-center font-mono text-xs text-zinc-400">
+    {{.Attempt}}
+  </td>
+  <td class="px-5 py-3 text-center">
+    <div class="flex items-center justify-center gap-2">
+      {{if eq .Status "failed"}}
+      <form method="POST" action="/generations/{{.ID}}/retry">
+        <button type="submit" class="btn-retry">Relancer</button>
+      </form>
+      {{end}}
+      <button class="text-zinc-500 hover:text-zinc-300 text-xs font-mono"
+              hx-get="/generations/{{.ID}}/logs"
+              hx-target="#logs-{{.ID}}"
+              hx-swap="innerHTML">
+        Logs
+      </button>
+    </div>
+  </td>
+</tr>
+{{if or .ErrorMessage .ClaudeOutput}}
+<tr>
+  <td colspan="7" class="px-0 py-0">
+    <div id="logs-{{.ID}}"></div>
+  </td>
+</tr>
+{{else}}
+<tr>
+  <td colspan="7" class="px-0 py-0">
+    <div id="logs-{{.ID}}"></div>
+  </td>
+</tr>
+{{end}}
+{{end}}
+{{end}}
+
+{{define "generation_logs"}}
+<div class="bg-surface-1 border-t border-surface-3 px-5 py-4">
+  {{if .ErrorMessage}}
+  <div class="mb-3">
+    <div class="text-xs font-mono text-red-400 uppercase tracking-wider mb-1">Erreur</div>
+    <pre class="text-xs text-red-300 bg-red-950/20 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap font-mono">{{.ErrorMessage}}</pre>
+  </div>
+  {{end}}
+  {{if .ClaudeOutput}}
+  <div class="mb-3">
+    <div class="text-xs font-mono text-zinc-500 uppercase tracking-wider mb-1">Sortie Claude</div>
+    <pre class="text-xs text-zinc-400 bg-surface-2 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap font-mono max-h-64 overflow-y-auto">{{.ClaudeOutput}}</pre>
+  </div>
+  {{end}}
+  {{if .PromptSent}}
+  <div>
+    <div class="text-xs font-mono text-zinc-500 uppercase tracking-wider mb-1">Prompt envoyé</div>
+    <pre class="text-xs text-zinc-400 bg-surface-2 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">{{.PromptSent}}</pre>
+  </div>
+  {{end}}
+  {{if and (not .ErrorMessage) (not .ClaudeOutput) (not .PromptSent)}}
+  <div class="text-xs text-zinc-500">Aucun log disponible.</div>
+  {{end}}
+</div>
+{{end}}
