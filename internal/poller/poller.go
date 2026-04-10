@@ -44,7 +44,7 @@ func (p *Poller) Start(ctx context.Context) {
 	// Run once immediately
 	if n, err := p.PollOnce(ctx); err != nil {
 		slog.Error("poll cycle failed", "error", err)
-	} else if n > 0 {
+	} else {
 		slog.Info("poll cycle completed", "new_tickets", n)
 	}
 
@@ -57,9 +57,10 @@ func (p *Poller) Start(ctx context.Context) {
 			slog.Info("poller stopped")
 			return
 		case <-ticker.C:
+			slog.Debug("poll cycle starting")
 			if n, err := p.PollOnce(ctx); err != nil {
 				slog.Error("poll cycle failed", "error", err)
-			} else if n > 0 {
+			} else {
 				slog.Info("poll cycle completed", "new_tickets", n)
 			}
 		}
@@ -100,6 +101,12 @@ func (p *Poller) pollProject(ctx context.Context, project *store.Project) (int, 
 		return 0, err
 	}
 
+	slog.Info("poller: tickets found",
+		"project", project.Slug,
+		"count", len(tickets),
+		"developer_id", project.AutodevDeveloperID,
+	)
+
 	count := 0
 	for _, ticket := range tickets {
 		// Skip if already processed
@@ -109,6 +116,11 @@ func (p *Poller) pollProject(ctx context.Context, project *store.Project) (int, 
 			continue
 		}
 		if existing != nil {
+			slog.Debug("poller: ticket already has generation, skipping",
+				"ticket", ticket.FormattedNumber,
+				"generation_id", existing.ID,
+				"status", existing.Status,
+			)
 			continue
 		}
 

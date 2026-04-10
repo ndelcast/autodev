@@ -28,20 +28,7 @@ docker:
 
 web_port: 9090
 db_path: "/tmp/test.db"
-skills_dir: "/tmp/skills"
-contexts_dir: "/tmp/contexts"
 workspace_base_path: "/tmp/workspaces"
-
-projects:
-  - name: "Test Project"
-    slug: "test-project"
-    prodplanner_project_id: 1
-    github_repo: "org/repo"
-    docker_image: "autodev-base:latest"
-    context_file: "test.md"
-    skills: ["laravel", "data-modeling"]
-    autodev_developer_id: 3
-    done_column_id: 10
 `
 	path := writeTempFile(t, yaml)
 
@@ -88,21 +75,6 @@ projects:
 	}
 	if cfg.DBPath != "/tmp/test.db" {
 		t.Errorf("DBPath = %q, want %q", cfg.DBPath, "/tmp/test.db")
-	}
-
-	// Projects
-	if len(cfg.Projects) != 1 {
-		t.Fatalf("len(Projects) = %d, want 1", len(cfg.Projects))
-	}
-	p := cfg.Projects[0]
-	if p.Name != "Test Project" {
-		t.Errorf("Project.Name = %q, want %q", p.Name, "Test Project")
-	}
-	if p.Slug != "test-project" {
-		t.Errorf("Project.Slug = %q, want %q", p.Slug, "test-project")
-	}
-	if len(p.Skills) != 2 || p.Skills[0] != "laravel" {
-		t.Errorf("Project.Skills = %v, want [laravel data-modeling]", p.Skills)
 	}
 }
 

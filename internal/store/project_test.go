@@ -2,8 +2,6 @@ package store
 
 import (
 	"testing"
-
-	"github.com/outlined/autodev/config"
 )
 
 func newTestStore(t *testing.T) *Store {
@@ -25,8 +23,8 @@ func TestCreateAndGetProject(t *testing.T) {
 		Slug:                 "dispoo",
 		GithubRepo:           "outlined/dispoo",
 		DockerImage:          "autodev-laravel:latest",
-		ContextFile:          "dispoo.md",
-		Skills:               []string{"laravel", "data-modeling"},
+		ContextContent:       "# Dispoo context",
+		SkillsContent:        "## Laravel\n## Data modeling",
 		AutodevDeveloperID:   3,
 		DoneColumnID:         43,
 		Status:               "idle",
@@ -53,8 +51,11 @@ func TestCreateAndGetProject(t *testing.T) {
 	if got.GithubRepo != "outlined/dispoo" {
 		t.Errorf("GithubRepo = %q, want %q", got.GithubRepo, "outlined/dispoo")
 	}
-	if len(got.Skills) != 2 || got.Skills[0] != "laravel" || got.Skills[1] != "data-modeling" {
-		t.Errorf("Skills = %v, want [laravel data-modeling]", got.Skills)
+	if got.ContextContent != "# Dispoo context" {
+		t.Errorf("ContextContent = %q, want %q", got.ContextContent, "# Dispoo context")
+	}
+	if got.SkillsContent != "## Laravel\n## Data modeling" {
+		t.Errorf("SkillsContent = %q", got.SkillsContent)
 	}
 	if got.Status != "idle" {
 		t.Errorf("Status = %q, want %q", got.Status, "idle")
@@ -149,55 +150,66 @@ func TestUpdateProjectStatus(t *testing.T) {
 	}
 }
 
-func TestSeedProjects(t *testing.T) {
+func TestUpdateProject(t *testing.T) {
 	s := newTestStore(t)
 
-	configs := []config.ProjectConfig{
-		{
-			Name:                 "Dispoo",
-			Slug:                 "dispoo",
-			ProdPlannerProjectID: 13,
-			GithubRepo:           "outlined/dispoo",
-			DockerImage:          "autodev-laravel:latest",
-			ContextFile:          "dispoo.md",
-			Skills:               []string{"laravel"},
-			AutodevDeveloperID:   3,
-			DoneColumnID:         43,
-		},
+	p := &Project{
+		Name:                 "Test",
+		Slug:                 "test",
+		ProdPlannerProjectID: 1,
+		GithubRepo:           "org/repo",
+		DockerImage:          "autodev-base:latest",
+		Status:               "idle",
+	}
+	if err := s.CreateProject(p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
 	}
 
-	if err := s.SeedProjects(configs); err != nil {
-		t.Fatalf("SeedProjects: %v", err)
+	p.Name = "Test Updated"
+	p.GithubRepo = "org/repo-v2"
+	p.SkillsContent = "## Go\n## Testing"
+	if err := s.UpdateProject(p); err != nil {
+		t.Fatalf("UpdateProject: %v", err)
 	}
 
-	got, err := s.GetProjectBySlug("dispoo")
+	got, err := s.GetProject(p.ID)
 	if err != nil {
-		t.Fatalf("GetProjectBySlug: %v", err)
+		t.Fatalf("GetProject: %v", err)
 	}
-	if got.Name != "Dispoo" {
-		t.Errorf("Name = %q, want Dispoo", got.Name)
+	if got.Name != "Test Updated" {
+		t.Errorf("Name = %q, want %q", got.Name, "Test Updated")
+	}
+	if got.GithubRepo != "org/repo-v2" {
+		t.Errorf("GithubRepo = %q, want %q", got.GithubRepo, "org/repo-v2")
+	}
+	if got.SkillsContent != "## Go\n## Testing" {
+		t.Errorf("SkillsContent = %q", got.SkillsContent)
+	}
+}
+
+func TestDeleteProject(t *testing.T) {
+	s := newTestStore(t)
+
+	p := &Project{
+		Name:       "ToDelete",
+		Slug:       "to-delete",
+		GithubRepo: "org/repo",
+		DockerImage: "autodev-base:latest",
+		Status:     "idle",
+	}
+	if err := s.CreateProject(p); err != nil {
+		t.Fatalf("CreateProject: %v", err)
 	}
 
-	// Seed again with updated name — should upsert
-	configs[0].Name = "Dispoo V2"
-	if err := s.SeedProjects(configs); err != nil {
-		t.Fatalf("SeedProjects (upsert): %v", err)
+	if err := s.DeleteProject(p.ID); err != nil {
+		t.Fatalf("DeleteProject: %v", err)
 	}
 
-	got, err = s.GetProjectBySlug("dispoo")
-	if err != nil {
-		t.Fatalf("GetProjectBySlug after upsert: %v", err)
-	}
-	if got.Name != "Dispoo V2" {
-		t.Errorf("Name after upsert = %q, want Dispoo V2", got.Name)
-	}
-
-	// Should still be only 1 project
 	projects, err := s.ListProjects()
 	if err != nil {
 		t.Fatalf("ListProjects: %v", err)
 	}
-	if len(projects) != 1 {
-		t.Errorf("len = %d after upsert, want 1", len(projects))
+	if len(projects) != 0 {
+		t.Errorf("len = %d after delete, want 0", len(projects))
 	}
 }

@@ -2,24 +2,16 @@ package executor
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/outlined/autodev/internal/prodplanner"
 	"github.com/outlined/autodev/internal/store"
 )
 
-type PromptBuilder struct {
-	skillsDir   string
-	contextsDir string
-}
+type PromptBuilder struct{}
 
-func NewPromptBuilder(skillsDir, contextsDir string) *PromptBuilder {
-	return &PromptBuilder{
-		skillsDir:   skillsDir,
-		contextsDir: contextsDir,
-	}
+func NewPromptBuilder() *PromptBuilder {
+	return &PromptBuilder{}
 }
 
 // Build assembles the full prompt from project context, skills, and ticket details.
@@ -32,23 +24,13 @@ func (pb *PromptBuilder) Build(project *store.Project, ticket *prodplanner.Ticke
 	fmt.Fprintf(&b, "Tu implémente des fonctionnalités basées sur des tickets ProdPlanner.\n\n")
 
 	// 2. Project context
-	if project.ContextFile != "" {
-		contextPath := filepath.Join(pb.contextsDir, project.ContextFile)
-		content, err := os.ReadFile(contextPath)
-		if err != nil {
-			return "", fmt.Errorf("reading context file %s: %w", contextPath, err)
-		}
-		fmt.Fprintf(&b, "## Contexte du projet\n\n%s\n\n", strings.TrimSpace(string(content)))
+	if project.ContextContent != "" {
+		fmt.Fprintf(&b, "## Contexte du projet\n\n%s\n\n", strings.TrimSpace(project.ContextContent))
 	}
 
 	// 3. Skills
-	for _, skill := range project.Skills {
-		skillPath := filepath.Join(pb.skillsDir, skill+".md")
-		content, err := os.ReadFile(skillPath)
-		if err != nil {
-			return "", fmt.Errorf("reading skill file %s: %w", skillPath, err)
-		}
-		fmt.Fprintf(&b, "## Skill : %s\n\n%s\n\n", skill, strings.TrimSpace(string(content)))
+	if project.SkillsContent != "" {
+		fmt.Fprintf(&b, "## Compétences & conventions\n\n%s\n\n", strings.TrimSpace(project.SkillsContent))
 	}
 
 	// 4. Ticket

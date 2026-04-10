@@ -11,15 +11,23 @@ cd /workspace
 # 1. Git prep
 git config user.name "AutoDev"
 git config user.email "autodev@outlined.io"
+
+# Clean workspace from any previous run
+git checkout -- . 2>/dev/null || true
+git clean -fd 2>/dev/null || true
 git checkout main
 git pull origin main
+
+# Delete branch if it already exists (from a failed retry)
+git branch -D "$BRANCH_NAME" 2>/dev/null || true
+git push origin --delete "$BRANCH_NAME" 2>/dev/null || true
 git checkout -b "$BRANCH_NAME"
 
 # 2. Claude Code
 claude -p "$(cat "$PROMPT_FILE")" \
   --model "${CLAUDE_MODEL:-sonnet}" \
   --max-turns "${CLAUDE_MAX_TURNS:-30}" \
-  --allowedTools bash,write,read,edit \
+  --dangerously-skip-permissions \
   --output-format json \
   > /output/claude_result.json 2>/output/claude_stderr.log
 

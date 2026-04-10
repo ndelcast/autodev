@@ -43,7 +43,17 @@ func New(proc Processor, s *store.Store, maxConcurrent int) *Scheduler {
 func (s *Scheduler) Enqueue(gen *store.Generation) {
 	s.mu.Lock()
 	s.queue = append(s.queue, gen)
+	queueLen := len(s.queue)
+	runningCount := len(s.running)
 	s.mu.Unlock()
+
+	slog.Info("scheduler: enqueued generation",
+		"id", gen.ID,
+		"ticket", gen.TicketNumber,
+		"project_id", gen.ProjectID,
+		"queue_size", queueLen,
+		"running_projects", runningCount,
+	)
 
 	s.dispatch()
 }
@@ -63,7 +73,8 @@ func (s *Scheduler) dispatch() {
 	var remaining []*store.Generation
 	for _, gen := range s.queue {
 		if _, busy := s.running[gen.ProjectID]; busy {
-			// Project already running — keep in queue
+			slog.Debug("scheduler: project busy, keeping in queue",
+				"id", gen.ID, "project_id", gen.ProjectID)
 			remaining = append(remaining, gen)
 			continue
 		}
@@ -73,10 +84,17 @@ func (s *Scheduler) dispatch() {
 		case s.sem <- struct{}{}:
 			// Got a slot — mark project as running and launch
 			s.running[gen.ProjectID] = struct{}{}
+			slog.Info("scheduler: dispatching generation",
+				"id", gen.ID,
+				"ticket", gen.TicketNumber,
+				"slots_used", len(s.sem),
+				"slots_max", cap(s.sem),
+			)
 			s.wg.Add(1)
 			go s.processGeneration(gen)
 		default:
-			// No slot available — keep in queue
+			slog.Debug("scheduler: no slot available, keeping in queue",
+				"id", gen.ID, "slots_max", cap(s.sem))
 			remaining = append(remaining, gen)
 		}
 	}

@@ -36,27 +36,17 @@
       </form>
       {{end}}
       <button class="text-zinc-500 hover:text-zinc-300 text-xs font-mono"
-              hx-get="/generations/{{.ID}}/logs"
-              hx-target="#logs-{{.ID}}"
-              hx-swap="innerHTML">
+              onclick="toggleLogs({{.ID}})">
         Logs
       </button>
     </div>
   </td>
 </tr>
-{{if or .ErrorMessage .ClaudeOutput}}
 <tr>
   <td colspan="7" class="px-0 py-0">
-    <div id="logs-{{.ID}}"></div>
+    <div id="logs-{{.ID}}" class="gen-logs-panel" data-gen-id="{{.ID}}"></div>
   </td>
 </tr>
-{{else}}
-<tr>
-  <td colspan="7" class="px-0 py-0">
-    <div id="logs-{{.ID}}"></div>
-  </td>
-</tr>
-{{end}}
 {{end}}
 {{end}}
 

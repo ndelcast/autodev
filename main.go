@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"text/tabwriter"
 
+	"github.com/joho/godotenv"
 	"github.com/outlined/autodev/config"
 	"github.com/outlined/autodev/internal/executor"
 	"github.com/outlined/autodev/internal/poller"
@@ -20,12 +21,17 @@ import (
 )
 
 func main() {
-	// Setup structured logging
+	// Load .env file if present
+	godotenv.Load()
+
+	// Setup structured logging with log buffer for web dashboard
 	level := slog.LevelInfo
 	if os.Getenv("LOG_LEVEL") == "debug" {
 		level = slog.LevelDebug
 	}
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})))
+	logBuffer := web.NewLogBuffer(500)
+	textHandler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level})
+	slog.SetDefault(slog.New(web.NewSlogHandler(logBuffer, textHandler)))
 
 	if len(os.Args) < 2 {
 		printUsage()
@@ -49,7 +55,7 @@ func main() {
 
 	switch os.Args[1] {
 	case "serve":
-		cmdServe(ctx, cfg)
+		cmdServe(ctx, cfg, logBuffer)
 	case "run":
 		cmdRun(ctx, cfg)
 	case "retry":
@@ -83,10 +89,6 @@ func initStore(cfg *config.Config) *store.Store {
 		slog.Error("opening database", "error", err)
 		os.Exit(1)
 	}
-	if err := s.SeedProjects(cfg.Projects); err != nil {
-		slog.Error("seeding projects", "error", err)
-		os.Exit(1)
-	}
 	return s
 }
 
@@ -96,11 +98,11 @@ func initExecutor(s *store.Store, pp *prodplanner.Client, cfg *config.Config) *e
 		slog.Error("creating docker client", "error", err)
 		os.Exit(1)
 	}
-	prompt := executor.NewPromptBuilder(cfg.SkillsDir, cfg.ContextsDir)
+	prompt := executor.NewPromptBuilder()
 	return executor.New(s, pp, docker, prompt, cfg)
 }
 
-func cmdServe(ctx context.Context, cfg *config.Config) {
+func cmdServe(ctx context.Context, cfg *config.Config, logBuffer *web.LogBuffer) {
 	s := initStore(cfg)
 	defer s.Close()
 
@@ -126,7 +128,7 @@ func cmdServe(ctx context.Context, cfg *config.Config) {
 	go poll.Start(ctx)
 
 	// Web dashboard
-	dashboard, err := web.New(s, poll, cfg.WebPort)
+	dashboard, err := web.New(s, poll, logBuffer, cfg.WebPort)
 	if err != nil {
 		slog.Error("creating dashboard", "error", err)
 		os.Exit(1)

@@ -5,97 +5,103 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"sync/atomic"
 	"testing"
 
 	"github.com/outlined/autodev/config"
 )
 
-func newTestServer(t *testing.T) (*httptest.Server, *atomic.Int32) {
+// mockMCPServer creates a test server that speaks the MCP protocol.
+func mockMCPServer(t *testing.T) *httptest.Server {
 	t.Helper()
-	authCount := &atomic.Int32{}
 
 	mux := http.NewServeMux()
-
-	mux.HandleFunc("/oauth/token", func(w http.ResponseWriter, r *http.Request) {
-		authCount.Add(1)
+	mux.HandleFunc("/mcp", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		json.NewEncoder(w).Encode(tokenResponse{
-			AccessToken: "test-token",
-			ExpiresIn:   3600,
-			TokenType:   "Bearer",
-		})
-	})
 
-	mux.HandleFunc("/api/tickets", func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer test-token" {
+		// Check auth headers
+		if r.Header.Get("X-Client-Id") != "test" || r.Header.Get("X-Client-Secret") != "secret" {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		tickets := []Ticket{
-			{
-				ID:              397,
-				FormattedNumber: "DISP-385",
-				Type:            "feat",
-				Title:           "Télécharger les icônes",
-				Description:     "En tant que prestataire...",
-				AssignedTo:      intPtr(3),
-			},
-		}
-		json.NewEncoder(w).Encode(tickets)
-	})
 
-	mux.HandleFunc("/api/tickets/397", func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer test-token" {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+		var req jsonRPCRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
 			return
 		}
-		ticket := Ticket{
-			ID:              397,
-			FormattedNumber: "DISP-385",
-			Type:            "feat",
-			Title:           "Télécharger les icônes",
-			Description:     "En tant que prestataire...",
-			AssignedTo:      intPtr(3),
-			BoardColumn:     BoardColumn{ID: 41, Name: "À Faire"},
-			Project:         TicketProject{ID: 13, Name: "Dispoo", TicketPrefix: "DISP"},
-		}
-		json.NewEncoder(w).Encode(ticket)
-	})
 
-	mux.HandleFunc("/api/tickets/397/move", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"success":true}`))
-	})
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Mcp-Session-Id", "test-session")
 
-	mux.HandleFunc("/api/tickets/397/complete", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
+		switch req.Method {
+		case "initialize":
+			json.NewEncoder(w).Encode(jsonRPCResponse{
+				JSONRPC: "2.0",
+				ID:      req.ID,
+				Result:  json.RawMessage(`{"protocolVersion":"2025-03-26","capabilities":{},"serverInfo":{"name":"prodplanner-test"}}`),
+			})
+
+		case "notifications/initialized":
+			w.WriteHeader(http.StatusAccepted)
+
+		case "tools/call":
+			var params toolCallParams
+			raw, _ := json.Marshal(req.Params)
+			json.Unmarshal(raw, &params)
+
+			var resultText string
+			switch params.Name {
+			case "list_tickets":
+				resultText = `{"tickets":[{"id":397,"formatted_number":"DISP-385","type":"feat","title":"Télécharger les icônes","description":"En tant que prestataire...","assigned_to":3}]}`
+			case "get_ticket":
+				resultText = `{"ticket":{"id":397,"formatted_number":"DISP-385","type":"feat","title":"Télécharger les icônes","description":"En tant que prestataire...","assigned_to":3,"board_column":{"id":41,"name":"À Faire"},"project":{"id":13,"name":"Dispoo","ticket_prefix":"DISP"}}}`
+			case "move_ticket":
+				resultText = `{"success":true}`
+			case "complete_ticket":
+				resultText = `{"success":true}`
+			default:
+				resultText = `{"error":"unknown tool"}`
+			}
+
+			result := mcpToolResult{
+				Content: []mcpContent{{Type: "text", Text: resultText}},
+			}
+			resultJSON, _ := json.Marshal(result)
+			json.NewEncoder(w).Encode(jsonRPCResponse{
+				JSONRPC: "2.0",
+				ID:      req.ID,
+				Result:  resultJSON,
+			})
+
+		default:
+			json.NewEncoder(w).Encode(jsonRPCResponse{
+				JSONRPC: "2.0",
+				ID:      req.ID,
+				Error:   &jsonRPCError{Code: -32601, Message: "method not found"},
+			})
 		}
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"success":true}`))
 	})
 
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	return srv, authCount
+	return srv
 }
 
-func TestListTickets(t *testing.T) {
-	srv, _ := newTestServer(t)
-	client := NewClient(config.ProdPlannerConfig{
-		BaseURL:      srv.URL + "/api",
+func newTestClient(t *testing.T) *Client {
+	t.Helper()
+	srv := mockMCPServer(t)
+	return NewClient(config.ProdPlannerConfig{
+		BaseURL:      srv.URL + "/mcp",
 		ClientID:     "test",
 		ClientSecret: "secret",
 	})
+}
+
+func TestListTickets(t *testing.T) {
+	client := newTestClient(t)
 
 	tickets, err := client.ListTickets(context.Background(), ListTicketsOptions{AssignedTo: 3})
 	if err != nil {
@@ -110,12 +116,7 @@ func TestListTickets(t *testing.T) {
 }
 
 func TestGetTicket(t *testing.T) {
-	srv, _ := newTestServer(t)
-	client := NewClient(config.ProdPlannerConfig{
-		BaseURL:      srv.URL + "/api",
-		ClientID:     "test",
-		ClientSecret: "secret",
-	})
+	client := newTestClient(t)
 
 	ticket, err := client.GetTicket(context.Background(), 397)
 	if err != nil {
@@ -130,12 +131,7 @@ func TestGetTicket(t *testing.T) {
 }
 
 func TestMoveTicket(t *testing.T) {
-	srv, _ := newTestServer(t)
-	client := NewClient(config.ProdPlannerConfig{
-		BaseURL:      srv.URL + "/api",
-		ClientID:     "test",
-		ClientSecret: "secret",
-	})
+	client := newTestClient(t)
 
 	err := client.MoveTicket(context.Background(), 397, 43)
 	if err != nil {
@@ -144,12 +140,7 @@ func TestMoveTicket(t *testing.T) {
 }
 
 func TestCompleteTicket(t *testing.T) {
-	srv, _ := newTestServer(t)
-	client := NewClient(config.ProdPlannerConfig{
-		BaseURL:      srv.URL + "/api",
-		ClientID:     "test",
-		ClientSecret: "secret",
-	})
+	client := newTestClient(t)
 
 	err := client.CompleteTicket(context.Background(), 397)
 	if err != nil {
@@ -157,27 +148,16 @@ func TestCompleteTicket(t *testing.T) {
 	}
 }
 
-func TestTokenCaching(t *testing.T) {
-	srv, authCount := newTestServer(t)
+func TestAuthFailure(t *testing.T) {
+	srv := mockMCPServer(t)
 	client := NewClient(config.ProdPlannerConfig{
-		BaseURL:      srv.URL + "/api",
-		ClientID:     "test",
-		ClientSecret: "secret",
+		BaseURL:      srv.URL + "/mcp",
+		ClientID:     "wrong",
+		ClientSecret: "credentials",
 	})
 
-	// Multiple requests should only authenticate once
-	for i := 0; i < 3; i++ {
-		_, err := client.ListTickets(context.Background(), ListTicketsOptions{})
-		if err != nil {
-			t.Fatalf("ListTickets call %d: %v", i, err)
-		}
+	_, err := client.ListTickets(context.Background(), ListTicketsOptions{})
+	if err == nil {
+		t.Fatal("expected error with wrong credentials")
 	}
-
-	if count := authCount.Load(); count != 1 {
-		t.Errorf("auth called %d times, want 1 (token should be cached)", count)
-	}
-}
-
-func intPtr(i int) *int {
-	return &i
 }

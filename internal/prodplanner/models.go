@@ -30,12 +30,6 @@ type Project struct {
 	TicketPrefix string `json:"ticket_prefix"`
 }
 
-type tokenResponse struct {
-	AccessToken string `json:"access_token"`
-	ExpiresIn   int    `json:"expires_in"`
-	TokenType   string `json:"token_type"`
-}
-
 type ListTicketsOptions struct {
 	AssignedTo int
 	ProjectID  int

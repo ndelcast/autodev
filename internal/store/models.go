@@ -1,7 +1,6 @@
 package store
 
 import (
-	"strings"
 	"time"
 )
 
@@ -12,8 +11,8 @@ type Project struct {
 	Slug                 string
 	GithubRepo           string
 	DockerImage          string
-	ContextFile          string
-	Skills               []string
+	ContextContent       string // Markdown context injected into prompts
+	SkillsContent        string // Markdown skills injected into prompts
 	AutodevDeveloperID   int
 	DoneColumnID         int
 	Status               string // "idle", "running"
@@ -42,13 +41,3 @@ type Generation struct {
 	UpdatedAt           time.Time
 }
 
-func joinSkills(skills []string) string {
-	return strings.Join(skills, ",")
-}
-
-func splitSkills(s string) []string {
-	if s == "" {
-		return nil
-	}
-	return strings.Split(s, ",")
-}

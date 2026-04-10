@@ -16,32 +16,58 @@ var templateFS embed.FS
 
 // Server is the web dashboard HTTP server.
 type Server struct {
-	store  *store.Store
-	poller *poller.Poller
-	tmpl   *template.Template
-	port   int
+	store     *store.Store
+	poller    *poller.Poller
+	logBuffer *LogBuffer
+	pages     map[string]*template.Template
+	port      int
+}
+
+var funcMap = template.FuncMap{
+	"statusClass": statusClass,
+	"truncate":    truncate,
 }
 
 // New creates a new web server.
-func New(s *store.Store, p *poller.Poller, port int) (*Server, error) {
-	funcMap := template.FuncMap{
-		"statusClass": statusClass,
-		"truncate":    truncate,
+func New(s *store.Store, p *poller.Poller, logBuf *LogBuffer, port int) (*Server, error) {
+	// Parse each page template independently so they can each define
+	// their own "content" and "title" blocks without conflicting.
+	pages := map[string]*template.Template{}
+
+	pageFiles := map[string]string{
+		"projects.html":       "templates/projects.html",
+		"project_detail.html": "templates/project_detail.html",
+		"project_form.html":   "templates/project_form.html",
+		"logs.html":           "templates/logs.html",
 	}
 
-	tmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS,
-		"templates/*.html",
+	for name, path := range pageFiles {
+		t, err := template.New("").Funcs(funcMap).ParseFS(templateFS,
+			"templates/layout.html",
+			"templates/partials/*.html",
+			path,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("parsing template %s: %w", name, err)
+		}
+		pages[name] = t
+	}
+
+	// Partials-only template for HTMX fragments
+	partials, err := template.New("").Funcs(funcMap).ParseFS(templateFS,
 		"templates/partials/*.html",
 	)
 	if err != nil {
-		return nil, fmt.Errorf("parsing templates: %w", err)
+		return nil, fmt.Errorf("parsing partials: %w", err)
 	}
+	pages["partials"] = partials
 
 	return &Server{
-		store:  s,
-		poller: p,
-		tmpl:   tmpl,
-		port:   port,
+		store:     s,
+		poller:    p,
+		logBuffer: logBuf,
+		pages:     pages,
+		port:      port,
 	}, nil
 }
 
@@ -50,13 +76,22 @@ func (s *Server) Start() error {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /", s.handleProjects)
+	mux.HandleFunc("GET /projects/new", s.handleProjectNew)
+	mux.HandleFunc("POST /projects/new", s.handleProjectCreate)
 	mux.HandleFunc("GET /projects/{id}", s.handleProjectDetail)
+	mux.HandleFunc("GET /projects/{id}/edit", s.handleProjectEdit)
+	mux.HandleFunc("POST /projects/{id}/edit", s.handleProjectUpdate)
+	mux.HandleFunc("POST /projects/{id}/delete", s.handleProjectDelete)
 	mux.HandleFunc("POST /projects/{id}/poll", s.handleForcePoll)
 	mux.HandleFunc("POST /generations/{id}/retry", s.handleRetryGeneration)
 	mux.HandleFunc("GET /generations/{id}/logs", s.handleGenerationLogs)
 
 	// HTMX partial: auto-refresh generation rows
 	mux.HandleFunc("GET /projects/{id}/generations-partial", s.handleGenerationsPartial)
+
+	// Logs
+	mux.HandleFunc("GET /logs", s.handleLogs)
+	mux.HandleFunc("GET /logs/stream", s.handleLogsStream)
 
 	addr := fmt.Sprintf(":%d", s.port)
 	slog.Info("dashboard listening", "addr", addr)
@@ -86,3 +121,4 @@ func truncate(s string, max int) string {
 	}
 	return s[:max] + "..."
 }
+

@@ -1,191 +1,314 @@
 package prodplanner
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"net/url"
-	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/outlined/autodev/config"
 )
 
+// Client communicates with ProdPlanner via the MCP (Model Context Protocol) endpoint.
 type Client struct {
-	baseURL      string
+	mcpURL       string
 	clientID     string
 	clientSecret string
 	httpClient   *http.Client
-	token        string
-	tokenExpiry  time.Time
+	sessionID    string
 	mu           sync.Mutex
+	initialized  bool
+	reqID        atomic.Int64
 }
 
 func NewClient(cfg config.ProdPlannerConfig) *Client {
 	return &Client{
-		baseURL:      strings.TrimRight(cfg.BaseURL, "/"),
+		mcpURL:       strings.TrimRight(cfg.BaseURL, "/"),
 		clientID:     cfg.ClientID,
 		clientSecret: cfg.ClientSecret,
 		httpClient:   &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
-func (c *Client) authenticate(ctx context.Context) error {
-	data := url.Values{
-		"grant_type":    {"client_credentials"},
-		"client_id":     {c.clientID},
-		"client_secret": {c.clientSecret},
+// JSON-RPC 2.0 types
+
+type jsonRPCRequest struct {
+	JSONRPC string `json:"jsonrpc"`
+	ID      any    `json:"id,omitempty"`
+	Method  string `json:"method"`
+	Params  any    `json:"params,omitempty"`
+}
+
+type jsonRPCResponse struct {
+	JSONRPC string          `json:"jsonrpc"`
+	ID      any             `json:"id,omitempty"`
+	Result  json.RawMessage `json:"result,omitempty"`
+	Error   *jsonRPCError   `json:"error,omitempty"`
+}
+
+type jsonRPCError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+type toolCallParams struct {
+	Name      string `json:"name"`
+	Arguments any    `json:"arguments,omitempty"`
+}
+
+type mcpToolResult struct {
+	Content []mcpContent `json:"content"`
+	IsError bool         `json:"isError,omitempty"`
+}
+
+type mcpContent struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+// ensureInitialized performs the MCP initialize handshake if not already done.
+func (c *Client) ensureInitialized(ctx context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.initialized {
+		return nil
 	}
 
-	// OAuth token endpoint is at the app root, not under /api
-	tokenURL := strings.TrimSuffix(c.baseURL, "/api") + "/oauth/token"
+	// Step 1: initialize
+	initParams := map[string]any{
+		"protocolVersion": "2025-03-26",
+		"capabilities":    map[string]any{},
+		"clientInfo": map[string]string{
+			"name":    "autodev",
+			"version": "1.0.0",
+		},
+	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", tokenURL, strings.NewReader(data.Encode()))
+	resp, err := c.sendRaw(ctx, "initialize", initParams, c.nextID())
 	if err != nil {
-		return fmt.Errorf("creating auth request: %w", err)
+		return fmt.Errorf("MCP initialize: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Accept", "application/json")
+	if resp.Error != nil {
+		return fmt.Errorf("MCP initialize error: %s", resp.Error.Message)
+	}
 
-	resp, err := c.httpClient.Do(req)
+	// Step 2: send initialized notification (no id = notification)
+	_, err = c.sendRaw(ctx, "notifications/initialized", nil, nil)
 	if err != nil {
-		return fmt.Errorf("authenticating: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("auth failed with status %d: %s", resp.StatusCode, body)
+		return fmt.Errorf("MCP initialized notification: %w", err)
 	}
 
-	var tokenResp tokenResponse
-	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
-		return fmt.Errorf("decoding auth response: %w", err)
-	}
-
-	c.token = tokenResp.AccessToken
-	c.tokenExpiry = time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
+	c.initialized = true
 	return nil
 }
 
-func (c *Client) doRequest(ctx context.Context, method, path string, body io.Reader) (*http.Response, error) {
-	c.mu.Lock()
-	needsAuth := c.token == "" || time.Now().After(c.tokenExpiry.Add(-30*time.Second))
-	if needsAuth {
-		if err := c.authenticate(ctx); err != nil {
-			c.mu.Unlock()
-			return nil, err
-		}
-	}
-	token := c.token
-	c.mu.Unlock()
-
-	reqURL := c.baseURL + path
-	req, err := http.NewRequestWithContext(ctx, method, reqURL, body)
-	if err != nil {
-		return nil, fmt.Errorf("creating request %s %s: %w", method, path, err)
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/json")
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("executing request %s %s: %w", method, path, err)
-	}
-
-	if resp.StatusCode >= 400 {
-		respBody, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		return nil, fmt.Errorf("API error %d on %s %s: %s", resp.StatusCode, method, path, respBody)
-	}
-
-	return resp, nil
+func (c *Client) nextID() int64 {
+	return c.reqID.Add(1)
 }
 
+// sendRaw sends a JSON-RPC request and reads the response.
+// If id is nil, it's a notification (no response expected).
+func (c *Client) sendRaw(ctx context.Context, method string, params any, id any) (*jsonRPCResponse, error) {
+	req := jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      id,
+		Method:  method,
+		Params:  params,
+	}
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.mcpURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "application/json, text/event-stream")
+	httpReq.Header.Set("X-Client-Id", c.clientID)
+	httpReq.Header.Set("X-Client-Secret", c.clientSecret)
+	if c.sessionID != "" {
+		httpReq.Header.Set("Mcp-Session-Id", c.sessionID)
+	}
+
+	httpResp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer httpResp.Body.Close()
+
+	// Capture session ID
+	if sid := httpResp.Header.Get("Mcp-Session-Id"); sid != "" {
+		c.sessionID = sid
+	}
+
+	// Notification — no response expected
+	if id == nil {
+		return &jsonRPCResponse{}, nil
+	}
+
+	// Handle SSE or direct JSON
+	ct := httpResp.Header.Get("Content-Type")
+	if strings.Contains(ct, "text/event-stream") {
+		return c.readSSEResponse(httpResp)
+	}
+
+	var rpcResp jsonRPCResponse
+	if err := json.NewDecoder(httpResp.Body).Decode(&rpcResp); err != nil {
+		return nil, fmt.Errorf("decoding JSON-RPC response: %w", err)
+	}
+	return &rpcResp, nil
+}
+
+// readSSEResponse reads a Server-Sent Events stream and extracts the JSON-RPC response.
+func (c *Client) readSSEResponse(resp *http.Response) (*jsonRPCResponse, error) {
+	scanner := bufio.NewScanner(resp.Body)
+	var dataLines []string
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "data: ") {
+			dataLines = append(dataLines, strings.TrimPrefix(line, "data: "))
+		} else if line == "" && len(dataLines) > 0 {
+			// End of SSE event — try to parse
+			data := strings.Join(dataLines, "\n")
+			dataLines = nil
+
+			var rpcResp jsonRPCResponse
+			if err := json.Unmarshal([]byte(data), &rpcResp); err == nil && rpcResp.ID != nil {
+				return &rpcResp, nil
+			}
+		}
+	}
+
+	// Try remaining data
+	if len(dataLines) > 0 {
+		data := strings.Join(dataLines, "\n")
+		var rpcResp jsonRPCResponse
+		if err := json.Unmarshal([]byte(data), &rpcResp); err == nil {
+			return &rpcResp, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no JSON-RPC response found in SSE stream")
+}
+
+// callTool calls an MCP tool and returns the text content from the result.
+func (c *Client) callTool(ctx context.Context, name string, args any) (string, error) {
+	if err := c.ensureInitialized(ctx); err != nil {
+		return "", err
+	}
+
+	params := toolCallParams{Name: name, Arguments: args}
+	resp, err := c.sendRaw(ctx, "tools/call", params, c.nextID())
+	if err != nil {
+		return "", fmt.Errorf("calling tool %s: %w", name, err)
+	}
+	if resp.Error != nil {
+		return "", fmt.Errorf("tool %s error: %s", name, resp.Error.Message)
+	}
+
+	var result mcpToolResult
+	if err := json.Unmarshal(resp.Result, &result); err != nil {
+		return "", fmt.Errorf("decoding tool result for %s: %w", name, err)
+	}
+
+	if result.IsError {
+		for _, c := range result.Content {
+			if c.Type == "text" {
+				return "", fmt.Errorf("tool %s returned error: %s", name, c.Text)
+			}
+		}
+		return "", fmt.Errorf("tool %s returned error", name)
+	}
+
+	for _, c := range result.Content {
+		if c.Type == "text" {
+			return c.Text, nil
+		}
+	}
+	return "", fmt.Errorf("tool %s returned no text content", name)
+}
+
+// Public API methods
+
 func (c *Client) ListTickets(ctx context.Context, opts ListTicketsOptions) ([]Ticket, error) {
-	params := url.Values{}
+	args := map[string]any{}
 	if opts.AssignedTo > 0 {
-		params.Set("assigned_to", strconv.Itoa(opts.AssignedTo))
+		args["assigned_to"] = opts.AssignedTo
 	}
 	if opts.ProjectID > 0 {
-		params.Set("project_id", strconv.Itoa(opts.ProjectID))
+		args["project_id"] = opts.ProjectID
 	}
 	if opts.ColumnID > 0 {
-		params.Set("column_id", strconv.Itoa(opts.ColumnID))
+		args["column_id"] = opts.ColumnID
 	}
 	if opts.Status != "" {
-		params.Set("status", opts.Status)
+		args["status"] = opts.Status
 	}
 
-	path := "/tickets"
-	if len(params) > 0 {
-		path += "?" + params.Encode()
-	}
-
-	resp, err := c.doRequest(ctx, "GET", path, nil)
+	text, err := c.callTool(ctx, "list_tickets", args)
 	if err != nil {
 		return nil, fmt.Errorf("listing tickets: %w", err)
 	}
-	defer resp.Body.Close()
 
-	// ProdPlanner may return {data: [...]} or directly [...]
 	var result struct {
-		Data []Ticket `json:"data"`
+		Tickets []Ticket `json:"tickets"`
 	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading response: %w", err)
+	if err := json.Unmarshal([]byte(text), &result); err != nil {
+		return nil, fmt.Errorf("decoding tickets: %w", err)
 	}
-
-	// Try paginated response first
-	if err := json.Unmarshal(body, &result); err == nil && result.Data != nil {
-		return result.Data, nil
-	}
-
-	// Fallback to direct array
-	var tickets []Ticket
-	if err := json.Unmarshal(body, &tickets); err != nil {
-		return nil, fmt.Errorf("decoding tickets response: %w", err)
-	}
-	return tickets, nil
+	return result.Tickets, nil
 }
 
 func (c *Client) GetTicket(ctx context.Context, ticketID int) (*Ticket, error) {
-	resp, err := c.doRequest(ctx, "GET", "/tickets/"+strconv.Itoa(ticketID), nil)
+	text, err := c.callTool(ctx, "get_ticket", map[string]any{
+		"ticket_id": ticketID,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("getting ticket %d: %w", ticketID, err)
 	}
-	defer resp.Body.Close()
 
-	var ticket Ticket
-	if err := json.NewDecoder(resp.Body).Decode(&ticket); err != nil {
-		return nil, fmt.Errorf("decoding ticket: %w", err)
+	var result struct {
+		Ticket Ticket `json:"ticket"`
 	}
-	return &ticket, nil
+	if err := json.Unmarshal([]byte(text), &result); err != nil {
+		// Try direct unmarshal
+		var ticket Ticket
+		if err2 := json.Unmarshal([]byte(text), &ticket); err2 != nil {
+			return nil, fmt.Errorf("decoding ticket: %w", err)
+		}
+		return &ticket, nil
+	}
+	return &result.Ticket, nil
 }
 
 func (c *Client) MoveTicket(ctx context.Context, ticketID int, columnID int) error {
-	payload := fmt.Sprintf(`{"ticket_id":%d,"board_column_id":%d}`, ticketID, columnID)
-	resp, err := c.doRequest(ctx, "POST", "/tickets/"+strconv.Itoa(ticketID)+"/move", strings.NewReader(payload))
+	_, err := c.callTool(ctx, "move_ticket", map[string]any{
+		"ticket_id":       ticketID,
+		"board_column_id": columnID,
+	})
 	if err != nil {
 		return fmt.Errorf("moving ticket %d: %w", ticketID, err)
 	}
-	resp.Body.Close()
 	return nil
 }
 
 func (c *Client) CompleteTicket(ctx context.Context, ticketID int) error {
-	resp, err := c.doRequest(ctx, "POST", "/tickets/"+strconv.Itoa(ticketID)+"/complete", nil)
+	_, err := c.callTool(ctx, "complete_ticket", map[string]any{
+		"ticket_id": ticketID,
+	})
 	if err != nil {
 		return fmt.Errorf("completing ticket %d: %w", ticketID, err)
 	}
-	resp.Body.Close()
 	return nil
 }

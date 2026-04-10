@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"time"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
 )
 
 type ContainerOpts struct {
@@ -107,27 +107,18 @@ func (d *DockerRunner) RunContainer(ctx context.Context, opts ContainerOpts) (*C
 func (d *DockerRunner) collectLogs(containerID string) (string, string) {
 	ctx := context.Background()
 
-	stdoutReader, err := d.client.ContainerLogs(ctx, containerID, container.LogsOptions{
+	reader, err := d.client.ContainerLogs(ctx, containerID, container.LogsOptions{
 		ShowStdout: true,
-		ShowStderr: false,
-	})
-	if err != nil {
-		return "", ""
-	}
-	defer stdoutReader.Close()
-
-	stderrReader, err := d.client.ContainerLogs(ctx, containerID, container.LogsOptions{
-		ShowStdout: false,
 		ShowStderr: true,
 	})
 	if err != nil {
 		return "", ""
 	}
-	defer stderrReader.Close()
+	defer reader.Close()
 
 	var stdoutBuf, stderrBuf bytes.Buffer
-	io.Copy(&stdoutBuf, stdoutReader)
-	io.Copy(&stderrBuf, stderrReader)
+	// StdCopy demultiplexes the Docker log stream (8-byte header per frame)
+	stdcopy.StdCopy(&stdoutBuf, &stderrBuf, reader)
 
 	return stdoutBuf.String(), stderrBuf.String()
 }

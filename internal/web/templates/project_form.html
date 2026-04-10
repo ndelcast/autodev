@@ -1,0 +1,157 @@
+{{define "project_form.html"}}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoDev — {{if .IsEdit}}Modifier{{else}}Nouveau{{end}} projet</title>
+  {{template "head"}}
+  <style>
+    .form-label { display: block; font-size: 12px; font-weight: 600; color: #a1a1aa; text-transform: uppercase; letter-spacing: 0.05em; font-family: 'JetBrains Mono', monospace; margin-bottom: 6px; }
+    .form-input { width: 100%; background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 10px 14px; color: #e4e4e7; font-size: 14px; outline: none; transition: border-color 0.15s; }
+    .form-input:focus { border-color: #6366f1; }
+    .form-input::placeholder { color: #52525b; }
+    select.form-input { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2371717a' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 36px; }
+    textarea.form-input { font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.6; resize: vertical; min-height: 120px; }
+    .form-hint { font-size: 12px; color: #52525b; margin-top: 4px; }
+    .form-section { margin-bottom: 32px; }
+    .form-section-title { font-size: 14px; font-weight: 600; color: #e4e4e7; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid #1e1e22; }
+  </style>
+</head>
+<body class="grid-bg min-h-screen">
+  {{template "nav"}}
+  <main class="max-w-2xl mx-auto px-8 py-8">
+    <div class="mb-8">
+      <div class="flex items-center gap-3 mb-1">
+        <a href="{{if .IsEdit}}/projects/{{.Project.ID}}{{else}}/{{end}}" class="text-zinc-500 hover:text-zinc-300 text-sm">&larr; Retour</a>
+      </div>
+      <h1 class="text-2xl font-semibold text-white">{{if .IsEdit}}Modifier le projet{{else}}Nouveau projet{{end}}</h1>
+    </div>
+
+    {{if .Error}}
+    <div class="mb-6 bg-red-950/30 border border-red-900/50 rounded-xl px-5 py-4 text-sm text-red-300">
+      {{.Error}}
+    </div>
+    {{end}}
+
+    <form method="POST" action="{{if .IsEdit}}/projects/{{.Project.ID}}/edit{{else}}/projects/new{{end}}">
+      <div class="bg-surface-1 border border-surface-3 rounded-xl p-6">
+
+        <!-- General -->
+        <div class="form-section">
+          <div class="form-section-title">Informations generales</div>
+          <div class="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label class="form-label" for="name">Nom du projet *</label>
+              <input type="text" id="name" name="name" class="form-input" placeholder="Mon Projet" value="{{.Project.Name}}" required>
+            </div>
+            <div>
+              <label class="form-label" for="slug">Slug *</label>
+              <input type="text" id="slug" name="slug" class="form-input font-mono" placeholder="mon-projet" value="{{.Project.Slug}}" required>
+              <div class="form-hint">Identifiant unique (lettres, chiffres, tirets)</div>
+            </div>
+          </div>
+          <div class="mb-4">
+            <label class="form-label" for="github_repo">Repository GitHub *</label>
+            <input type="text" id="github_repo" name="github_repo" class="form-input font-mono" placeholder="org/repo" value="{{.Project.GithubRepo}}" required>
+          </div>
+          <div>
+            <label class="form-label" for="docker_image">Image Docker *</label>
+            <select id="docker_image" name="docker_image" class="form-input" required>
+              <option value="">-- Choisir une image --</option>
+              {{range .DockerImages}}
+              <option value="{{.}}" {{if eq . $.Project.DockerImage}}selected{{end}}>{{.}}</option>
+              {{end}}
+            </select>
+          </div>
+        </div>
+
+        <!-- ProdPlanner -->
+        <div class="form-section">
+          <div class="form-section-title">ProdPlanner</div>
+          <div class="grid grid-cols-3 gap-4">
+            <div>
+              <label class="form-label" for="prodplanner_project_id">ID Projet</label>
+              <input type="number" id="prodplanner_project_id" name="prodplanner_project_id" class="form-input font-mono" placeholder="0" value="{{if gt .Project.ProdPlannerProjectID 0}}{{.Project.ProdPlannerProjectID}}{{end}}">
+            </div>
+            <div>
+              <label class="form-label" for="autodev_developer_id">ID Developpeur</label>
+              <input type="number" id="autodev_developer_id" name="autodev_developer_id" class="form-input font-mono" placeholder="0" value="{{if gt .Project.AutodevDeveloperID 0}}{{.Project.AutodevDeveloperID}}{{end}}">
+              <div class="form-hint">ID de l'utilisateur AutoDev dans ProdPlanner</div>
+            </div>
+            <div>
+              <label class="form-label" for="done_column_id">ID Colonne "Done"</label>
+              <input type="number" id="done_column_id" name="done_column_id" class="form-input font-mono" placeholder="0" value="{{if gt .Project.DoneColumnID 0}}{{.Project.DoneColumnID}}{{end}}">
+            </div>
+          </div>
+        </div>
+
+        <!-- Context -->
+        <div class="form-section">
+          <div class="form-section-title">Contexte du projet</div>
+          <div class="mb-4">
+            <label class="form-label" for="context_content">Contexte (Markdown)</label>
+            <textarea id="context_content" name="context_content" class="form-input" rows="8"
+                      placeholder="# Mon Projet&#10;&#10;Description du projet, stack technique, conventions...">{{.Project.ContextContent}}</textarea>
+            <div class="form-hint">Ce texte sera injecte dans chaque prompt envoye a Claude. Decrivez le projet, sa stack, ses conventions.</div>
+          </div>
+        </div>
+
+        <!-- Skills -->
+        <div class="form-section">
+          <div class="form-section-title">Competences & conventions</div>
+          <div>
+            <label class="form-label" for="skills_content">Skills (Markdown)</label>
+            <textarea id="skills_content" name="skills_content" class="form-input" rows="10"
+                      placeholder="## Laravel&#10;- Models dans app/Models/&#10;- Migrations dans database/migrations/&#10;&#10;## Vue.js&#10;- Composants dans resources/js/Components/">{{.Project.SkillsContent}}</textarea>
+            <div class="form-hint">Regles techniques, patterns, et conventions que Claude doit suivre. Format Markdown.</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Actions -->
+      <div class="flex items-center justify-between mt-6">
+        {{if .IsEdit}}
+        <button type="button" class="text-sm text-red-400 hover:text-red-300 font-mono"
+                onclick="if(confirm('Supprimer ce projet ? Cette action est irreversible.')) document.getElementById('delete-form').submit()">
+          Supprimer le projet
+        </button>
+        {{else}}
+        <div></div>
+        {{end}}
+        <div class="flex items-center gap-3">
+          <a href="{{if .IsEdit}}/projects/{{.Project.ID}}{{else}}/{{end}}" class="btn-secondary">Annuler</a>
+          <button type="submit" class="btn-primary">
+            {{if .IsEdit}}Enregistrer{{else}}Creer le projet{{end}}
+          </button>
+        </div>
+      </div>
+    </form>
+
+    {{if .IsEdit}}
+    <form id="delete-form" method="POST" action="/projects/{{.Project.ID}}/delete" style="display:none"></form>
+    {{end}}
+
+    <script>
+      // Auto-generate slug from name
+      const nameInput = document.getElementById('name');
+      const slugInput = document.getElementById('slug');
+      {{if not .IsEdit}}
+      let slugEdited = slugInput.value !== '';
+      slugInput.addEventListener('input', () => { slugEdited = true; });
+      nameInput.addEventListener('input', () => {
+        if (!slugEdited) {
+          slugInput.value = nameInput.value
+            .toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-|-$/g, '');
+        }
+      });
+      {{end}}
+    </script>
+  </main>
+</body>
+</html>
+{{end}}

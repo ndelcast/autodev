@@ -1,76 +1,125 @@
 {{define "project_detail.html"}}
-{{template "layout" .}}
-{{end}}
-
-{{define "title"}} — {{.Project.Name}}{{end}}
-
-{{define "content"}}
-<div class="flex items-center justify-between mb-8">
-  <div>
-    <div class="flex items-center gap-3 mb-1">
-      <a href="/" class="text-zinc-500 hover:text-zinc-300 text-sm">&larr; Projets</a>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoDev — {{.Project.Name}}</title>
+  {{template "head"}}
+</head>
+<body class="grid-bg min-h-screen">
+  {{template "nav"}}
+  <main class="max-w-6xl mx-auto px-8 py-8">
+    <div class="flex items-center justify-between mb-8">
+      <div>
+        <div class="flex items-center gap-3 mb-1">
+          <a href="/" class="text-zinc-500 hover:text-zinc-300 text-sm">&larr; Projets</a>
+        </div>
+        <h1 class="text-2xl font-semibold text-white">{{.Project.Name}}</h1>
+        <div class="flex items-center gap-3 mt-1">
+          <span class="font-mono text-xs text-zinc-500">{{.Project.GithubRepo}}</span>
+          <span class="badge badge-{{.Project.Status}}">{{.Project.Status}}</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <a href="/projects/{{.Project.ID}}/edit" class="btn-secondary">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Modifier
+        </a>
+        <form method="POST" action="/projects/{{.Project.ID}}/poll">
+          <button type="submit" class="btn-secondary">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+            Forcer le polling
+          </button>
+        </form>
+      </div>
     </div>
-    <h1 class="text-2xl font-semibold text-white">{{.Project.Name}}</h1>
-    <div class="flex items-center gap-3 mt-1">
-      <span class="font-mono text-xs text-zinc-500">{{.Project.GithubRepo}}</span>
-      <span class="badge badge-{{.Project.Status}}">{{.Project.Status}}</span>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-4 gap-4 mb-8">
+      <div class="bg-surface-1 border border-surface-3 rounded-xl p-5">
+        <div class="text-xs text-zinc-500 font-mono uppercase tracking-wider mb-1">Total</div>
+        <div class="text-2xl font-bold text-white font-mono">{{.Project.Total}}</div>
+      </div>
+      <div class="bg-surface-1 border border-surface-3 rounded-xl p-5">
+        <div class="text-xs text-zinc-500 font-mono uppercase tracking-wider mb-1">Terminées</div>
+        <div class="text-2xl font-bold text-emerald-400 font-mono">{{.Project.Completed}}</div>
+      </div>
+      <div class="bg-surface-1 border border-surface-3 rounded-xl p-5">
+        <div class="text-xs text-zinc-500 font-mono uppercase tracking-wider mb-1">Échouées</div>
+        <div class="text-2xl font-bold text-red-400 font-mono">{{.Project.Failed}}</div>
+      </div>
+      <div class="bg-surface-1 border border-surface-3 rounded-xl p-5">
+        <div class="text-xs text-zinc-500 font-mono uppercase tracking-wider mb-1">En cours</div>
+        <div class="text-2xl font-bold text-amber-400 font-mono">{{.Project.Running}}</div>
+      </div>
     </div>
-  </div>
-  <form method="POST" action="/projects/{{.Project.ID}}/poll">
-    <button type="submit" class="btn-secondary">
-      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-      Forcer le polling
-    </button>
-  </form>
-</div>
 
-<!-- Stats -->
-<div class="grid grid-cols-4 gap-4 mb-8">
-  <div class="bg-surface-1 border border-surface-3 rounded-xl p-5">
-    <div class="text-xs text-zinc-500 font-mono uppercase tracking-wider mb-1">Total</div>
-    <div class="text-2xl font-bold text-white font-mono">{{.Project.Total}}</div>
-  </div>
-  <div class="bg-surface-1 border border-surface-3 rounded-xl p-5">
-    <div class="text-xs text-zinc-500 font-mono uppercase tracking-wider mb-1">Terminées</div>
-    <div class="text-2xl font-bold text-emerald-400 font-mono">{{.Project.Completed}}</div>
-  </div>
-  <div class="bg-surface-1 border border-surface-3 rounded-xl p-5">
-    <div class="text-xs text-zinc-500 font-mono uppercase tracking-wider mb-1">Échouées</div>
-    <div class="text-2xl font-bold text-red-400 font-mono">{{.Project.Failed}}</div>
-  </div>
-  <div class="bg-surface-1 border border-surface-3 rounded-xl p-5">
-    <div class="text-xs text-zinc-500 font-mono uppercase tracking-wider mb-1">En cours</div>
-    <div class="text-2xl font-bold text-amber-400 font-mono">{{.Project.Running}}</div>
-  </div>
-</div>
+    <!-- Generations table -->
+    <div class="border border-surface-3 rounded-xl overflow-hidden"
+         hx-get="/projects/{{.Project.ID}}/generations-partial"
+         hx-trigger="every 5s"
+         hx-target="#gen-tbody"
+         hx-swap="innerHTML">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-surface-3 text-xs text-zinc-500 uppercase tracking-wider font-mono">
+            <th class="text-left px-5 py-3">Ticket</th>
+            <th class="text-center px-5 py-3">Statut</th>
+            <th class="text-left px-5 py-3">Branche</th>
+            <th class="text-left px-5 py-3">PR</th>
+            <th class="text-center px-5 py-3">Durée</th>
+            <th class="text-center px-5 py-3">#</th>
+            <th class="text-center px-5 py-3">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="gen-tbody">
+          {{template "generation_rows" .Generations}}
+        </tbody>
+      </table>
+    </div>
 
-<!-- Generations table -->
-<div class="border border-surface-3 rounded-xl overflow-hidden"
-     hx-get="/projects/{{.Project.ID}}/generations-partial"
-     hx-trigger="every 5s"
-     hx-target="#gen-tbody"
-     hx-swap="innerHTML">
-  <table class="w-full text-sm">
-    <thead>
-      <tr class="border-b border-surface-3 text-xs text-zinc-500 uppercase tracking-wider font-mono">
-        <th class="text-left px-5 py-3">Ticket</th>
-        <th class="text-center px-5 py-3">Statut</th>
-        <th class="text-left px-5 py-3">Branche</th>
-        <th class="text-left px-5 py-3">PR</th>
-        <th class="text-center px-5 py-3">Durée</th>
-        <th class="text-center px-5 py-3">#</th>
-        <th class="text-center px-5 py-3">Actions</th>
-      </tr>
-    </thead>
-    <tbody id="gen-tbody">
-      {{template "generation_rows" .Generations}}
-    </tbody>
-  </table>
-</div>
+    {{if eq (len .Generations) 0}}
+    <div class="text-center text-zinc-500 py-12">
+      Aucune génération pour ce projet.
+    </div>
+    {{end}}
+  </main>
 
-{{if eq (len .Generations) 0}}
-<div class="text-center text-zinc-500 py-12">
-  Aucune génération pour ce projet.
-</div>
-{{end}}
+  <script>
+    // Track which generation logs are open
+    const openLogs = new Set();
+
+    function toggleLogs(genId) {
+      const panel = document.getElementById('logs-' + genId);
+      if (!panel) return;
+
+      if (openLogs.has(genId)) {
+        // Close
+        openLogs.delete(genId);
+        panel.innerHTML = '';
+      } else {
+        // Open — fetch logs
+        openLogs.add(genId);
+        fetchLogs(genId);
+      }
+    }
+
+    function fetchLogs(genId) {
+      const panel = document.getElementById('logs-' + genId);
+      if (!panel) return;
+      fetch('/generations/' + genId + '/logs')
+        .then(r => r.text())
+        .then(html => { panel.innerHTML = html; });
+    }
+
+    // After HTMX swaps the table rows, re-open any logs that were open
+    document.body.addEventListener('htmx:afterSwap', function(e) {
+      if (e.detail.target.id === 'gen-tbody') {
+        openLogs.forEach(genId => fetchLogs(genId));
+      }
+    });
+  </script>
+</body>
+</html>
 {{end}}

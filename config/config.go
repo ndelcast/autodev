@@ -15,10 +15,7 @@ type Config struct {
 	Docker            DockerConfig      `yaml:"docker"`
 	WebPort           int               `yaml:"web_port"`
 	DBPath            string            `yaml:"db_path"`
-	SkillsDir         string            `yaml:"skills_dir"`
-	ContextsDir       string            `yaml:"contexts_dir"`
 	WorkspaceBasePath string            `yaml:"workspace_base_path"`
-	Projects          []ProjectConfig   `yaml:"projects"`
 }
 
 type ProdPlannerConfig struct {
@@ -102,12 +99,6 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.DBPath == "" {
 		cfg.DBPath = "./autodev.db"
-	}
-	if cfg.SkillsDir == "" {
-		cfg.SkillsDir = "./skills"
-	}
-	if cfg.ContextsDir == "" {
-		cfg.ContextsDir = "./contexts"
 	}
 	if cfg.WorkspaceBasePath == "" {
 		cfg.WorkspaceBasePath = "./workspaces"

@@ -1,0 +1,82 @@
+{{define "logs.html"}}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoDev — Logs</title>
+  {{template "head"}}
+</head>
+<body class="grid-bg min-h-screen">
+  {{template "nav"}}
+  <main class="max-w-6xl mx-auto px-8 py-8">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-semibold text-white">Logs</h1>
+        <p class="text-sm text-zinc-500 mt-1">Logs en temps réel du service AutoDev</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="status" class="badge badge-running gen-pulse">Connecté</span>
+        <button onclick="clearLogs()" class="btn-secondary text-xs">Effacer</button>
+      </div>
+    </div>
+
+    <div class="border border-surface-3 rounded-xl overflow-hidden bg-surface-0">
+      <!-- Historical logs -->
+      <div id="log-container" class="max-h-[70vh] overflow-y-auto">
+        {{range .Entries}}
+        <div class="flex gap-3 py-1 px-3 font-mono text-xs border-b border-surface-3/30 hover:bg-surface-2/50">
+          <span class="text-zinc-600 shrink-0">{{.Time.Format "15:04:05"}}</span>
+          <span class="shrink-0 w-12 {{if eq .Level "ERROR"}}text-red-400{{else if eq .Level "WARN"}}text-amber-400{{else if eq .Level "INFO"}}text-emerald-400{{else}}text-zinc-400{{end}}">{{.Level}}</span>
+          <span class="text-zinc-300">{{.Message}}</span>
+          <span class="text-zinc-500">{{.Attrs}}</span>
+        </div>
+        {{end}}
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const container = document.getElementById('log-container');
+    const status = document.getElementById('status');
+    let autoScroll = true;
+
+    // Auto-scroll detection
+    container.addEventListener('scroll', () => {
+      autoScroll = container.scrollTop + container.clientHeight >= container.scrollHeight - 50;
+    });
+
+    function clearLogs() {
+      container.innerHTML = '';
+    }
+
+    function connect() {
+      const es = new EventSource('/logs/stream');
+
+      es.onmessage = (e) => {
+        container.insertAdjacentHTML('beforeend', e.data);
+        if (autoScroll) {
+          container.scrollTop = container.scrollHeight;
+        }
+      };
+
+      es.onerror = () => {
+        status.className = 'badge badge-failed';
+        status.textContent = 'Déconnecté';
+        es.close();
+        setTimeout(connect, 3000);
+      };
+
+      es.onopen = () => {
+        status.className = 'badge badge-running gen-pulse';
+        status.textContent = 'Connecté';
+      };
+    }
+
+    // Scroll to bottom on load
+    container.scrollTop = container.scrollHeight;
+    connect();
+  </script>
+</body>
+</html>
+{{end}}

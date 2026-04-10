@@ -2,9 +2,11 @@ package web
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/outlined/autodev/internal/store"
 )
@@ -233,18 +235,236 @@ func (s *Server) handleGenerationLogs(w http.ResponseWriter, r *http.Request) {
 	s.renderPartial(w, "generation_logs", toGenerationRow(*gen))
 }
 
-func (s *Server) render(w http.ResponseWriter, name string, data any) {
+func (s *Server) render(w http.ResponseWriter, page string, data any) {
+	t, ok := s.pages[page]
+	if !ok {
+		slog.Error("template not found", "page", page)
+		http.Error(w, "Erreur interne", 500)
+		return
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.tmpl.ExecuteTemplate(w, name, data); err != nil {
-		slog.Error("rendering template", "name", name, "error", err)
+	if err := t.ExecuteTemplate(w, page, data); err != nil {
+		slog.Error("rendering template", "page", page, "error", err)
 	}
 }
 
 func (s *Server) renderPartial(w http.ResponseWriter, name string, data any) {
+	t := s.pages["partials"]
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.tmpl.ExecuteTemplate(w, name, data); err != nil {
+	if err := t.ExecuteTemplate(w, name, data); err != nil {
 		slog.Error("rendering partial", "name", name, "error", err)
 	}
+}
+
+type logsData struct {
+	Entries []LogEntry
+}
+
+func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
+	entries := s.logBuffer.Entries()
+	s.render(w, "logs.html", logsData{Entries: entries})
+}
+
+func (s *Server) handleLogsStream(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "SSE non supporté", 500)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	ch := s.logBuffer.Subscribe()
+	defer s.logBuffer.Unsubscribe(ch)
+
+	ctx := r.Context()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case entry := <-ch:
+			levelClass := "text-zinc-400"
+			switch entry.Level {
+			case "ERROR":
+				levelClass = "text-red-400"
+			case "WARN":
+				levelClass = "text-amber-400"
+			case "INFO":
+				levelClass = "text-emerald-400"
+			}
+
+			html := fmt.Sprintf(
+				`<div class="flex gap-3 py-1 px-3 font-mono text-xs border-b border-surface-3/30 hover:bg-surface-2/50">`+
+					`<span class="text-zinc-600 shrink-0">%s</span>`+
+					`<span class="%s shrink-0 w-12">%s</span>`+
+					`<span class="text-zinc-300">%s</span>`+
+					`<span class="text-zinc-500">%s</span>`+
+					`</div>`,
+				entry.Time.Format("15:04:05"),
+				levelClass,
+				entry.Level,
+				entry.Message,
+				entry.Attrs,
+			)
+
+			fmt.Fprintf(w, "data: %s\n\n", html)
+			flusher.Flush()
+		}
+	}
+}
+
+type projectFormData struct {
+	Project      *store.Project
+	IsEdit       bool
+	DockerImages []string
+	Error        string
+}
+
+func (s *Server) handleProjectNew(w http.ResponseWriter, r *http.Request) {
+	s.render(w, "project_form.html", projectFormData{
+		Project:      &store.Project{Status: "idle"},
+		DockerImages: s.listDockerImages(),
+	})
+}
+
+func (s *Server) handleProjectCreate(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+
+	p := &store.Project{
+		Name:                 r.FormValue("name"),
+		Slug:                 r.FormValue("slug"),
+		GithubRepo:           r.FormValue("github_repo"),
+		DockerImage:          r.FormValue("docker_image"),
+		ContextContent:       r.FormValue("context_content"),
+		SkillsContent:        r.FormValue("skills_content"),
+		ProdPlannerProjectID: atoi(r.FormValue("prodplanner_project_id")),
+		AutodevDeveloperID:   atoi(r.FormValue("autodev_developer_id")),
+		DoneColumnID:         atoi(r.FormValue("done_column_id")),
+		Status:               "idle",
+	}
+
+	if p.Name == "" || p.Slug == "" || p.GithubRepo == "" || p.DockerImage == "" {
+		s.render(w, "project_form.html", projectFormData{
+			Project:      p,
+			DockerImages: s.listDockerImages(),
+			Error:        "Les champs Nom, Slug, Repo GitHub et Image Docker sont requis.",
+		})
+		return
+	}
+
+	if err := s.store.CreateProject(p); err != nil {
+		slog.Error("creating project", "error", err)
+		s.render(w, "project_form.html", projectFormData{
+			Project:      p,
+			DockerImages: s.listDockerImages(),
+			Error:        fmt.Sprintf("Erreur: %v", err),
+		})
+		return
+	}
+
+	slog.Info("project created via dashboard", "id", p.ID, "slug", p.Slug)
+	http.Redirect(w, r, fmt.Sprintf("/projects/%d", p.ID), http.StatusSeeOther)
+}
+
+func (s *Server) handleProjectEdit(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	project, err := s.store.GetProject(id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	s.render(w, "project_form.html", projectFormData{
+		Project:      project,
+		IsEdit:       true,
+		DockerImages: s.listDockerImages(),
+	})
+}
+
+func (s *Server) handleProjectUpdate(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	project, err := s.store.GetProject(id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	r.ParseForm()
+	project.Name = r.FormValue("name")
+	project.Slug = r.FormValue("slug")
+	project.GithubRepo = r.FormValue("github_repo")
+	project.DockerImage = r.FormValue("docker_image")
+	project.ContextContent = r.FormValue("context_content")
+	project.SkillsContent = r.FormValue("skills_content")
+	project.ProdPlannerProjectID = atoi(r.FormValue("prodplanner_project_id"))
+	project.AutodevDeveloperID = atoi(r.FormValue("autodev_developer_id"))
+	project.DoneColumnID = atoi(r.FormValue("done_column_id"))
+
+	if project.Name == "" || project.Slug == "" || project.GithubRepo == "" || project.DockerImage == "" {
+		s.render(w, "project_form.html", projectFormData{
+			Project:      project,
+			IsEdit:       true,
+			DockerImages: s.listDockerImages(),
+			Error:        "Les champs Nom, Slug, Repo GitHub et Image Docker sont requis.",
+		})
+		return
+	}
+
+	if err := s.store.UpdateProject(project); err != nil {
+		slog.Error("updating project", "error", err)
+		s.render(w, "project_form.html", projectFormData{
+			Project:      project,
+			IsEdit:       true,
+			DockerImages: s.listDockerImages(),
+			Error:        fmt.Sprintf("Erreur: %v", err),
+		})
+		return
+	}
+
+	slog.Info("project updated via dashboard", "id", project.ID, "slug", project.Slug)
+	http.Redirect(w, r, fmt.Sprintf("/projects/%d", project.ID), http.StatusSeeOther)
+}
+
+func (s *Server) handleProjectDelete(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	if err := s.store.DeleteProject(id); err != nil {
+		slog.Error("deleting project", "error", err)
+		http.Error(w, "Erreur interne", 500)
+		return
+	}
+
+	slog.Info("project deleted via dashboard", "id", id)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+func (s *Server) listDockerImages() []string {
+	return []string{
+		"autodev-laravel:latest",
+		"autodev-node:latest",
+		"autodev-base:latest",
+	}
+}
+
+func atoi(s string) int {
+	n, _ := strconv.Atoi(strings.TrimSpace(s))
+	return n
 }
 
 func toGenerationRow(g store.Generation) generationRow {

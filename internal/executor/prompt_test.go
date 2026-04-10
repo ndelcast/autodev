@@ -1,8 +1,6 @@
 package executor
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -11,22 +9,12 @@ import (
 )
 
 func TestBuildPrompt(t *testing.T) {
-	dir := t.TempDir()
-	skillsDir := filepath.Join(dir, "skills")
-	contextsDir := filepath.Join(dir, "contexts")
-	os.MkdirAll(skillsDir, 0755)
-	os.MkdirAll(contextsDir, 0755)
-
-	os.WriteFile(filepath.Join(contextsDir, "test.md"), []byte("# Test Project\n\nThis is a test project."), 0644)
-	os.WriteFile(filepath.Join(skillsDir, "go.md"), []byte("Use Go idioms. Handle errors."), 0644)
-	os.WriteFile(filepath.Join(skillsDir, "testing.md"), []byte("Write table-driven tests."), 0644)
-
-	pb := NewPromptBuilder(skillsDir, contextsDir)
+	pb := NewPromptBuilder()
 
 	project := &store.Project{
-		Name:        "Test Project",
-		ContextFile: "test.md",
-		Skills:      []string{"go", "testing"},
+		Name:           "Test Project",
+		ContextContent: "# Test Project\n\nThis is a test project.",
+		SkillsContent:  "Use Go idioms. Handle errors.\n\nWrite table-driven tests.",
 	}
 
 	ticket := &prodplanner.Ticket{
@@ -43,14 +31,11 @@ func TestBuildPrompt(t *testing.T) {
 		t.Fatalf("Build: %v", err)
 	}
 
-	// Check all sections are present
 	checks := []string{
 		"AutoDev",
 		"Test Project",
 		"This is a test project",
-		"Skill : go",
 		"Use Go idioms",
-		"Skill : testing",
 		"Write table-driven tests",
 		"TEST-42",
 		"Add user authentication",
@@ -64,29 +49,11 @@ func TestBuildPrompt(t *testing.T) {
 	}
 }
 
-func TestBuildPromptMissingContext(t *testing.T) {
-	dir := t.TempDir()
-	pb := NewPromptBuilder(filepath.Join(dir, "skills"), filepath.Join(dir, "contexts"))
-
-	project := &store.Project{
-		Name:        "Test",
-		ContextFile: "nonexistent.md",
-	}
-	ticket := &prodplanner.Ticket{Title: "test"}
-
-	_, err := pb.Build(project, ticket)
-	if err == nil {
-		t.Fatal("expected error for missing context file")
-	}
-}
-
 func TestBuildPromptNoContext(t *testing.T) {
-	dir := t.TempDir()
-	pb := NewPromptBuilder(filepath.Join(dir, "skills"), filepath.Join(dir, "contexts"))
+	pb := NewPromptBuilder()
 
 	project := &store.Project{
-		Name:        "Test",
-		ContextFile: "", // no context file
+		Name: "Test",
 	}
 	ticket := &prodplanner.Ticket{
 		FormattedNumber: "T-1",
@@ -100,10 +67,13 @@ func TestBuildPromptNoContext(t *testing.T) {
 	if !strings.Contains(prompt, "T-1") {
 		t.Error("prompt missing ticket number")
 	}
+	if strings.Contains(prompt, "Contexte du projet") {
+		t.Error("should not have context section when empty")
+	}
 }
 
 func TestBuildPRBody(t *testing.T) {
-	pb := NewPromptBuilder("", "")
+	pb := NewPromptBuilder()
 	ticket := &prodplanner.Ticket{
 		FormattedNumber: "DISP-385",
 		Title:           "Télécharger les icônes",

@@ -1,55 +1,67 @@
 {{define "projects.html"}}
-{{template "layout" .}}
-{{end}}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoDev — Projets</title>
+  {{template "head"}}
+</head>
+<body class="grid-bg min-h-screen">
+  {{template "nav"}}
+  <main class="max-w-6xl mx-auto px-8 py-8">
+    <div class="flex items-center justify-between mb-8">
+      <div>
+        <h1 class="text-2xl font-semibold text-white">Projets</h1>
+        <p class="text-sm text-zinc-500 mt-1">Projets configurés pour la génération automatique</p>
+      </div>
+      <a href="/projects/new" class="btn-primary">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        Nouveau projet
+      </a>
+    </div>
 
-{{define "title"}} — Projets{{end}}
-
-{{define "content"}}
-<div class="flex items-center justify-between mb-8">
-  <div>
-    <h1 class="text-2xl font-semibold text-white">Projets</h1>
-    <p class="text-sm text-zinc-500 mt-1">Projets configurés pour la génération automatique</p>
-  </div>
-</div>
-
-<div class="border border-surface-3 rounded-xl overflow-hidden">
-  <table class="w-full text-sm">
-    <thead>
-      <tr class="border-b border-surface-3 text-xs text-zinc-500 uppercase tracking-wider font-mono">
-        <th class="text-left px-5 py-3">Projet</th>
-        <th class="text-left px-5 py-3">Image</th>
-        <th class="text-center px-5 py-3">Générations</th>
-        <th class="text-center px-5 py-3">Statut</th>
-      </tr>
-    </thead>
-    <tbody>
-      {{range .Projects}}
-      <tr class="border-b border-surface-3/50 row-hover cursor-pointer" onclick="location.href='/projects/{{.ID}}'">
-        <td class="px-5 py-4">
-          <div class="font-medium text-white">{{.Name}}</div>
-          <div class="text-xs text-zinc-500 font-mono mt-0.5">{{.Slug}} &middot; {{.GithubRepo}}</div>
-        </td>
-        <td class="px-5 py-4">
-          <span class="font-mono text-xs text-zinc-400">{{.Image}}</span>
-        </td>
-        <td class="px-5 py-4 text-center">
-          <span class="font-mono text-zinc-300">{{.Total}}</span>
-          {{if gt .Completed 0}}<span class="text-xs text-emerald-400 ml-1">{{.Completed}} ok</span>{{end}}
-          {{if gt .Failed 0}}<span class="text-xs text-red-400 ml-1">{{.Failed}} err</span>{{end}}
-          {{if gt .Running 0}}<span class="text-xs text-amber-400 ml-1 gen-pulse">{{.Running}} en cours</span>{{end}}
-        </td>
-        <td class="px-5 py-4 text-center">
-          <span class="badge badge-{{.Status}}">{{.Status}}</span>
-        </td>
-      </tr>
-      {{else}}
-      <tr>
-        <td colspan="4" class="px-5 py-12 text-center text-zinc-500">
-          Aucun projet configuré. Ajoutez des projets dans <span class="font-mono text-zinc-400">config.yaml</span>.
-        </td>
-      </tr>
-      {{end}}
-    </tbody>
-  </table>
-</div>
+    <div class="border border-surface-3 rounded-xl overflow-hidden">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-surface-3 text-xs text-zinc-500 uppercase tracking-wider font-mono">
+            <th class="text-left px-5 py-3">Projet</th>
+            <th class="text-left px-5 py-3">Image</th>
+            <th class="text-center px-5 py-3">Générations</th>
+            <th class="text-center px-5 py-3">Statut</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range .Projects}}
+          <tr class="border-b border-surface-3/50 row-hover cursor-pointer" onclick="location.href='/projects/{{.ID}}'">
+            <td class="px-5 py-4">
+              <div class="font-medium text-white">{{.Name}}</div>
+              <div class="text-xs text-zinc-500 font-mono mt-0.5">{{.Slug}} &middot; {{.GithubRepo}}</div>
+            </td>
+            <td class="px-5 py-4">
+              <span class="font-mono text-xs text-zinc-400">{{.Image}}</span>
+            </td>
+            <td class="px-5 py-4 text-center">
+              <span class="font-mono text-zinc-300">{{.Total}}</span>
+              {{if gt .Completed 0}}<span class="text-xs text-emerald-400 ml-1">{{.Completed}} ok</span>{{end}}
+              {{if gt .Failed 0}}<span class="text-xs text-red-400 ml-1">{{.Failed}} err</span>{{end}}
+              {{if gt .Running 0}}<span class="text-xs text-amber-400 ml-1 gen-pulse">{{.Running}} en cours</span>{{end}}
+            </td>
+            <td class="px-5 py-4 text-center">
+              <span class="badge badge-{{.Status}}">{{.Status}}</span>
+            </td>
+          </tr>
+          {{else}}
+          <tr>
+            <td colspan="4" class="px-5 py-12 text-center text-zinc-500">
+              Aucun projet configuré. <a href="/projects/new" class="text-accent hover:text-accent-light underline">Créer un projet</a>
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </main>
+</body>
+</html>
 {{end}}
