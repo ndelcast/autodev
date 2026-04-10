@@ -12,18 +12,20 @@ cd /workspace
 git config user.name "AutoDev"
 git config user.email "autodev@outlined.io"
 
-# Clean workspace from any previous run
+# Clean workspace from any previous run (preserve CLAUDE.md written by executor)
+cp CLAUDE.md /tmp/CLAUDE.md.bak 2>/dev/null || true
 git checkout -- . 2>/dev/null || true
 git clean -fd 2>/dev/null || true
 git checkout main
 git pull origin main
+cp /tmp/CLAUDE.md.bak CLAUDE.md 2>/dev/null || true
 
 # Delete branch if it already exists (from a failed retry)
 git branch -D "$BRANCH_NAME" 2>/dev/null || true
 git push origin --delete "$BRANCH_NAME" 2>/dev/null || true
 git checkout -b "$BRANCH_NAME"
 
-# 2. Claude Code
+# 2. Claude Code (context + skills are in CLAUDE.md, prompt is ticket-only)
 claude -p "$(cat "$PROMPT_FILE")" \
   --model "${CLAUDE_MODEL:-sonnet}" \
   --max-turns "${CLAUDE_MAX_TURNS:-30}" \
@@ -32,6 +34,9 @@ claude -p "$(cat "$PROMPT_FILE")" \
   > /output/claude_result.json 2>/output/claude_stderr.log
 
 # 3. Commit + Push (seulement s'il y a des changements)
+# Remove CLAUDE.md before committing (it's injected per-run, not part of the repo)
+git checkout -- CLAUDE.md 2>/dev/null || git rm -f CLAUDE.md 2>/dev/null || true
+
 if [ -n "$(git status --porcelain)" ]; then
   git add -A
   git commit -m "feat($TICKET_NUMBER): $TICKET_TITLE"

@@ -8,7 +8,7 @@ import (
 	"github.com/outlined/autodev/internal/store"
 )
 
-func TestBuildPrompt(t *testing.T) {
+func TestBuildClaudeMD(t *testing.T) {
 	pb := NewPromptBuilder()
 
 	project := &store.Project{
@@ -16,6 +16,43 @@ func TestBuildPrompt(t *testing.T) {
 		ContextContent: "# Test Project\n\nThis is a test project.",
 		SkillsContent:  "Use Go idioms. Handle errors.\n\nWrite table-driven tests.",
 	}
+
+	claudeMD := pb.BuildClaudeMD(project)
+
+	checks := []string{
+		"Test Project",
+		"This is a test project",
+		"Use Go idioms",
+		"Write table-driven tests",
+		"Ne fais PAS de git commit",
+		"Code en anglais",
+	}
+	for _, check := range checks {
+		if !strings.Contains(claudeMD, check) {
+			t.Errorf("CLAUDE.md missing %q", check)
+		}
+	}
+}
+
+func TestBuildClaudeMDEmpty(t *testing.T) {
+	pb := NewPromptBuilder()
+
+	project := &store.Project{Name: "Empty"}
+	claudeMD := pb.BuildClaudeMD(project)
+
+	if strings.Contains(claudeMD, "Contexte du projet") {
+		t.Error("should not have context section when empty")
+	}
+	if strings.Contains(claudeMD, "Compétences") {
+		t.Error("should not have skills section when empty")
+	}
+	if !strings.Contains(claudeMD, "Règles générales") {
+		t.Error("should always have general rules")
+	}
+}
+
+func TestBuildPrompt(t *testing.T) {
+	pb := NewPromptBuilder()
 
 	ticket := &prodplanner.Ticket{
 		FormattedNumber: "TEST-42",
@@ -26,49 +63,23 @@ func TestBuildPrompt(t *testing.T) {
 		Size:            "m",
 	}
 
-	prompt, err := pb.Build(project, ticket)
-	if err != nil {
-		t.Fatalf("Build: %v", err)
-	}
+	prompt := pb.BuildPrompt(ticket)
 
 	checks := []string{
-		"AutoDev",
-		"Test Project",
-		"This is a test project",
-		"Use Go idioms",
-		"Write table-driven tests",
 		"TEST-42",
 		"Add user authentication",
 		"Implement JWT-based auth",
-		"Ne fais PAS de git commit",
+		"feat",
 	}
 	for _, check := range checks {
 		if !strings.Contains(prompt, check) {
 			t.Errorf("prompt missing %q", check)
 		}
 	}
-}
 
-func TestBuildPromptNoContext(t *testing.T) {
-	pb := NewPromptBuilder()
-
-	project := &store.Project{
-		Name: "Test",
-	}
-	ticket := &prodplanner.Ticket{
-		FormattedNumber: "T-1",
-		Title:           "Test",
-	}
-
-	prompt, err := pb.Build(project, ticket)
-	if err != nil {
-		t.Fatalf("Build: %v", err)
-	}
-	if !strings.Contains(prompt, "T-1") {
-		t.Error("prompt missing ticket number")
-	}
-	if strings.Contains(prompt, "Contexte du projet") {
-		t.Error("should not have context section when empty")
+	// Should NOT contain context/skills — those are in CLAUDE.md
+	if strings.Contains(prompt, "Contexte") {
+		t.Error("prompt should not contain context (moved to CLAUDE.md)")
 	}
 }
 
