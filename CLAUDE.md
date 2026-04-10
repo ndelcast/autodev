@@ -34,8 +34,8 @@ refactor/[PREFIX]-XXX/short-description
 
 ## Tech Stack
 
-- Laravel 12 + Filament v4
-- Livewire 3 + Tailwind CSS v4
+- Laravel 12 + Inertia.js v3
+- Vue 3 + PrimeVue (Aura theme) + Tailwind CSS v4
 - MySQL via Laravel Sail
 
 ## Code Conventions
