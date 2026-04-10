@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoDev — Architecture</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #09090b;
+      color: #e4e4e7;
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      padding: 48px;
+      background-image:
+        linear-gradient(rgba(99,102,241,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(99,102,241,0.025) 1px, transparent 1px);
+      background-size: 32px 32px;
+    }
+
+    h1 {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 20px; font-weight: 700; color: white;
+      text-align: center; margin-bottom: 8px; letter-spacing: -0.02em;
+    }
+    .subtitle {
+      text-align: center; font-size: 13px; color: #52525b;
+      margin-bottom: 48px; font-family: 'JetBrains Mono', monospace;
+    }
+
+    .canvas {
+      max-width: 1320px;
+      margin: 0 auto;
+      position: relative;
+    }
+
+    /* ── SVG Arrows ── */
+    svg.arrows {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none; z-index: 0;
+    }
+    svg.arrows line, svg.arrows path { stroke-width: 1.5; fill: none; }
+    svg.arrows .arrow-exec { stroke: #6366f1; opacity: 0.5; }
+    svg.arrows .arrow-data { stroke: #22c55e; opacity: 0.35; }
+    svg.arrows .arrow-docker { stroke: #0ea5e9; opacity: 0.45; }
+    svg.arrows .arrow-sched { stroke: #f59e0b; opacity: 0.45; }
+    svg.arrows .arrow-human { stroke: #3f3f46; stroke-dasharray: 4,4; opacity: 0.6; }
+
+    /* ── Zones ── */
+    .zone {
+      position: absolute; border-radius: 16px; border: 1px dashed; padding: 16px;
+    }
+    .zone-label {
+      font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.12em;
+      position: absolute; top: -8px; left: 20px; padding: 0 8px;
+    }
+
+    /* ── Nodes ── */
+    .node {
+      position: absolute; border-radius: 12px; border: 1px solid;
+      padding: 14px 18px; z-index: 2; min-width: 160px;
+    }
+    .node-title {
+      font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 700; margin-bottom: 4px;
+    }
+    .node-desc { font-size: 11px; line-height: 1.5; opacity: 0.6; }
+    .node-icon {
+      width: 28px; height: 28px; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center; margin-bottom: 8px;
+    }
+
+    .node-external { background: #0f0f12; border-color: #1e1e22; }
+    .node-external .node-icon { background: rgba(161,161,170,0.1); }
+    .node-external .node-title { color: #a1a1aa; }
+
+    .node-core { background: rgba(99,102,241,0.06); border-color: rgba(99,102,241,0.2); box-shadow: 0 0 20px -8px rgba(99,102,241,0.15); }
+    .node-core .node-icon { background: rgba(99,102,241,0.15); }
+    .node-core .node-title { color: #a5b4fc; }
+
+    .node-sched { background: rgba(245,158,11,0.05); border-color: rgba(245,158,11,0.2); box-shadow: 0 0 20px -8px rgba(245,158,11,0.1); }
+    .node-sched .node-icon { background: rgba(245,158,11,0.15); }
+    .node-sched .node-title { color: #fcd34d; }
+
+    .node-docker { background: rgba(14,165,233,0.05); border-color: rgba(14,165,233,0.25); box-shadow: 0 0 24px -8px rgba(14,165,233,0.12); }
+    .node-docker .node-icon { background: rgba(14,165,233,0.15); }
+    .node-docker .node-title { color: #7dd3fc; }
+
+    .node-storage { background: rgba(34,197,94,0.04); border-color: rgba(34,197,94,0.15); }
+    .node-storage .node-icon { background: rgba(34,197,94,0.12); }
+    .node-storage .node-title { color: #86efac; }
+
+    /* ── Step numbers ── */
+    .step-num {
+      position: absolute; width: 22px; height: 22px; border-radius: 50%;
+      background: #6366f1; color: white;
+      font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 5; box-shadow: 0 0 12px -2px rgba(99,102,241,0.4);
+    }
+
+    /* ── Flow labels ── */
+    .flow-label {
+      position: absolute; font-family: 'JetBrains Mono', monospace;
+      font-size: 9px; color: #52525b; white-space: nowrap; z-index: 3;
+      background: #09090b; padding: 2px 6px; border-radius: 4px;
+    }
+
+    /* ── Legend ── */
+    .legend {
+      position: absolute; bottom: 16px; right: 16px;
+      display: flex; flex-direction: column; gap: 6px; z-index: 5;
+    }
+    .legend-item {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 10px; font-family: 'JetBrains Mono', monospace; color: #52525b;
+    }
+    .legend-dot { width: 8px; height: 8px; border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+  <h1>&lt;/&gt; AutoDev — Architecture</h1>
+  <p class="subtitle">Go orchestrator · Scheduler · Docker containers · Claude Code · GitHub PRs</p>
+
+  <div class="canvas" style="height: 880px;">
+
+    <!-- ═══════ ZONES ═══════ -->
+
+    <!-- External (left) -->
+    <div class="zone" style="left: 0; top: 40px; width: 220px; height: 800px; border-color: #1e1e22;">
+      <div class="zone-label" style="color: #52525b; background: #09090b;">Systèmes externes</div>
+    </div>
+
+    <!-- AutoDev Go binary (center) -->
+    <div class="zone" style="left: 280px; top: 40px; width: 640px; height: 800px; border-color: rgba(99,102,241,0.15);">
+      <div class="zone-label" style="color: #6366f1; background: #09090b;">AutoDev (Go binary sur VPS)</div>
+    </div>
+
+    <!-- Docker containers sub-zone -->
+    <div class="zone" style="left: 300px; top: 490px; width: 600px; height: 200px; border-color: rgba(14,165,233,0.2); border-style: solid; border-width: 1.5px; border-radius: 14px;">
+      <div class="zone-label" style="color: #0ea5e9; background: #09090b;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round" style="vertical-align: -2px; margin-right: 4px;"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><polyline points="17 2 12 7 7 2"></polyline></svg>
+        Containers Docker éphémères (max_concurrent: 3)
+      </div>
+    </div>
+
+    <!-- Output (right) -->
+    <div class="zone" style="left: 980px; top: 40px; width: 220px; height: 400px; border-color: #1e1e22;">
+      <div class="zone-label" style="color: #52525b; background: #09090b;">Sorties</div>
+    </div>
+
+    <!-- ═══════ EXTERNAL NODES ═══════ -->
+
+    <!-- ProdPlanner -->
+    <div class="node node-external" style="left: 24px; top: 80px; width: 175px;">
+      <div class="node-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect></svg>
+      </div>
+      <div class="node-title">ProdPlanner</div>
+      <div class="node-desc">Story maps, tickets, board, assignations</div>
+    </div>
+
+    <!-- User -->
+    <div class="node node-external" style="left: 24px; top: 280px; width: 175px;">
+      <div class="node-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+      </div>
+      <div class="node-title">Développeur</div>
+      <div class="node-desc">Assigne tickets à AutoDev, review PRs</div>
+    </div>
+
+    <!-- Docker Images -->
+    <div class="node node-external" style="left: 24px; top: 550px; width: 175px;">
+      <div class="node-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><polyline points="17 2 12 7 7 2"></polyline></svg>
+      </div>
+      <div class="node-title">Docker Images</div>
+      <div class="node-desc">autodev-laravel<br>autodev-node<br>autodev-base</div>
+    </div>
+
+    <!-- ═══════ AUTODEV CORE NODES ═══════ -->
+
+    <!-- Poller -->
+    <div class="node node-core" style="left: 310px; top: 80px; width: 200px;">
+      <div class="node-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+      </div>
+      <div class="node-title">Poller</div>
+      <div class="node-desc">Goroutine · toutes les 60s<br>Détecte les tickets assignés</div>
+    </div>
+
+    <!-- Prompt Builder -->
+    <div class="node node-core" style="left: 310px; top: 280px; width: 200px;">
+      <div class="node-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+      </div>
+      <div class="node-title">Prompt Builder</div>
+      <div class="node-desc">context.md + skills + ticket → prompt.md</div>
+    </div>
+
+    <!-- Scheduler -->
+    <div class="node node-sched" style="left: 560px; top: 175px; width: 220px;">
+      <div class="node-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+      </div>
+      <div class="node-title">Scheduler</div>
+      <div class="node-desc">File d'attente FIFO<br>1 container/projet · N en parallèle<br>Semaphore (max_concurrent: 3)</div>
+    </div>
+
+    <!-- Executor -->
+    <div class="node node-core" style="left: 580px; top: 340px; width: 200px;">
+      <div class="node-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2" stroke-linecap="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+      </div>
+      <div class="node-title">Executor</div>
+      <div class="node-desc">Docker SDK Go<br>Create → Start → Wait → Collect</div>
+    </div>
+
+    <!-- Web Dashboard -->
+    <div class="node node-core" style="left: 310px; top: 175px; width: 200px;">
+      <div class="node-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+      </div>
+      <div class="node-title">Web Dashboard</div>
+      <div class="node-desc">:8080 · HTMX + Tailwind<br>Monitoring, logs, retry</div>
+    </div>
+
+    <!-- Skills & Contexts -->
+    <div class="node node-storage" style="left: 310px; top: 740px; width: 180px;">
+      <div class="node-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+      </div>
+      <div class="node-title">Skills & Contexts</div>
+      <div class="node-desc">skills/*.md — conventions<br>contexts/*.md — projet</div>
+    </div>
+
+    <!-- SQLite -->
+    <div class="node node-storage" style="left: 700px; top: 740px; width: 180px;">
+      <div class="node-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+      </div>
+      <div class="node-title">SQLite</div>
+      <div class="node-desc">projects + generations<br>autodev.db</div>
+    </div>
+
+    <!-- ═══════ DOCKER CONTAINERS ═══════ -->
+
+    <!-- Container 1 -->
+    <div class="node node-docker" style="left: 320px; top: 530px; width: 170px; min-width: auto;">
+      <div class="node-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+      </div>
+      <div class="node-title" style="font-size: 11px;">Container — Dispoo</div>
+      <div class="node-desc">autodev-laravel<br>DISP-385 · running</div>
+    </div>
+
+    <!-- Container 2 -->
+    <div class="node node-docker" style="left: 520px; top: 530px; width: 170px; min-width: auto;">
+      <div class="node-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+      </div>
+      <div class="node-title" style="font-size: 11px;">Container — CRM</div>
+      <div class="node-desc">autodev-laravel<br>CRM-12 · running</div>
+    </div>
+
+    <!-- Container 3 -->
+    <div class="node node-docker" style="left: 720px; top: 530px; width: 170px; min-width: auto;">
+      <div class="node-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+      </div>
+      <div class="node-title" style="font-size: 11px;">Container — Blog</div>
+      <div class="node-desc">autodev-node<br>BLOG-5 · running</div>
+    </div>
+
+    <!-- ═══════ OUTPUT NODES ═══════ -->
+
+    <!-- GitHub -->
+    <div class="node node-external" style="left: 1005px; top: 80px; width: 175px;">
+      <div class="node-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" stroke-width="2" stroke-linecap="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
+      </div>
+      <div class="node-title">GitHub</div>
+      <div class="node-desc">Branch + PR<br>1 ticket = 1 PR</div>
+    </div>
+
+    <!-- Ticket updated -->
+    <div class="node node-external" style="left: 1005px; top: 280px; width: 175px;">
+      <div class="node-icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a1a1aa" stroke-width="2" stroke-linecap="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+      </div>
+      <div class="node-title">Ticket mis à jour</div>
+      <div class="node-desc">→ colonne "À déployer"<br>via API ProdPlanner</div>
+    </div>
+
+    <!-- ═══════ SVG CONNECTIONS ═══════ -->
+    <svg class="arrows" viewBox="0 0 1320 880" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrowPurple" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L8,3 L0,6" fill="#6366f1" opacity="0.6"/>
+        </marker>
+        <marker id="arrowGreen" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L8,3 L0,6" fill="#22c55e" opacity="0.5"/>
+        </marker>
+        <marker id="arrowBlue" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L8,3 L0,6" fill="#0ea5e9" opacity="0.5"/>
+        </marker>
+        <marker id="arrowAmber" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L8,3 L0,6" fill="#f59e0b" opacity="0.5"/>
+        </marker>
+        <marker id="arrowGray" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L8,3 L0,6" fill="#52525b" opacity="0.5"/>
+        </marker>
+      </defs>
+
+      <!-- 1. ProdPlanner → Poller -->
+      <line x1="199" y1="120" x2="308" y2="120" class="arrow-exec" marker-end="url(#arrowPurple)"/>
+
+      <!-- 2. Poller → Scheduler (enqueue) -->
+      <path d="M512,140 C540,140 540,210 558,210" class="arrow-sched" marker-end="url(#arrowAmber)"/>
+
+      <!-- 3. Scheduler → Executor (dispatch goroutine) -->
+      <line x1="670" y1="275" x2="670" y2="338" class="arrow-sched" marker-end="url(#arrowAmber)"/>
+
+      <!-- Prompt Builder → Executor -->
+      <path d="M512,330 L578,370" class="arrow-exec" marker-end="url(#arrowPurple)"/>
+
+      <!-- Skills → Prompt Builder -->
+      <path d="M400,740 L400,380" class="arrow-data" marker-end="url(#arrowGreen)"/>
+
+      <!-- 4. Executor → Docker containers (launches) -->
+      <line x1="620" y1="440" x2="420" y2="528" class="arrow-docker" marker-end="url(#arrowBlue)" stroke-dasharray="6,4"/>
+      <line x1="680" y1="440" x2="605" y2="528" class="arrow-docker" marker-end="url(#arrowBlue)" stroke-dasharray="6,4"/>
+      <line x1="720" y1="440" x2="790" y2="528" class="arrow-docker" marker-end="url(#arrowBlue)" stroke-dasharray="6,4"/>
+
+      <!-- Docker Images → Containers -->
+      <path d="M200,590 L318,580" class="arrow-docker" marker-end="url(#arrowBlue)"/>
+
+      <!-- 5. Containers → GitHub (git push + PR) -->
+      <path d="M492,560 C900,500 920,140 1003,140" class="arrow-exec" marker-end="url(#arrowPurple)"/>
+
+      <!-- 6. Executor → Updated ticket -->
+      <path d="M782,390 L1003,330" class="arrow-exec" marker-end="url(#arrowPurple)"/>
+
+      <!-- Executor → SQLite -->
+      <path d="M740,440 L790,740" class="arrow-data" marker-end="url(#arrowGreen)"/>
+
+      <!-- SQLite → Web Dashboard -->
+      <path d="M700,745 C280,700 280,240 308,230" class="arrow-data" marker-end="url(#arrowGreen)" stroke-dasharray="4,4"/>
+
+      <!-- User → ProdPlanner -->
+      <path d="M112,280 L112,178" class="arrow-human" marker-end="url(#arrowGray)"/>
+
+      <!-- User → Web Dashboard -->
+      <path d="M200,310 C270,310 270,230 308,225" class="arrow-human" marker-end="url(#arrowGray)"/>
+
+      <!-- Container results → Executor -->
+      <path d="M640,528 L660,440" class="arrow-data" marker-end="url(#arrowGreen)" stroke-dasharray="4,3"/>
+
+    </svg>
+
+    <!-- ═══════ STEP NUMBERS ═══════ -->
+    <div class="step-num" style="left: 243px; top: 108px;">1</div>
+    <div class="step-num" style="left: 530px; top: 163px;">2</div>
+    <div class="step-num" style="left: 658px; top: 298px;">3</div>
+    <div class="step-num" style="left: 655px; top: 458px;">4</div>
+    <div class="step-num" style="left: 870px; top: 400px;">5</div>
+    <div class="step-num" style="left: 890px; top: 310px;">6</div>
+
+    <!-- ═══════ FLOW LABELS ═══════ -->
+    <div class="flow-label" style="left: 216px; top: 94px;">list_tickets (polling 60s)</div>
+    <div class="flow-label" style="left: 528px; top: 142px;">enqueue</div>
+    <div class="flow-label" style="left: 682px; top: 300px;">dispatch (goroutine)</div>
+    <div class="flow-label" style="left: 620px; top: 462px;">docker run × N</div>
+    <div class="flow-label" style="left: 830px; top: 420px;">git push + gh pr</div>
+    <div class="flow-label" style="left: 830px; top: 290px;">move_ticket</div>
+
+    <!-- ═══════ LEGEND ═══════ -->
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background: #6366f1;"></div> Flux d'exécution</div>
+      <div class="legend-item"><div class="legend-dot" style="background: #f59e0b;"></div> Ordonnancement</div>
+      <div class="legend-item"><div class="legend-dot" style="background: #0ea5e9;"></div> Docker (containers)</div>
+      <div class="legend-item"><div class="legend-dot" style="background: #22c55e;"></div> Flux de données</div>
+      <div class="legend-item"><div class="legend-dot" style="background: #3f3f46;"></div> Interaction humaine</div>
+    </div>
+
+    <!-- ═══════ INFO BADGE ═══════ -->
+    <div style="position: absolute; bottom: 16px; left: 16px; display: flex; gap: 8px; z-index: 5;">
+      <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #fbbf24; display: flex; align-items: center; gap: 6px; background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.15); padding: 6px 12px; border-radius: 8px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+        1 container/projet · N projets en parallèle · semaphore global
+      </div>
+      <div style="font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #38bdf8; display: flex; align-items: center; gap: 6px; background: rgba(14,165,233,0.06); border: 1px solid rgba(14,165,233,0.15); padding: 6px 12px; border-radius: 8px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><polyline points="17 2 12 7 7 2"></polyline></svg>
+        Container éphémère · alpine + claude + git + gh + stack tools
+      </div>
+    </div>
+
+  </div>
+
+</body>
+</html>

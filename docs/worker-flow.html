@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoDev — Scheduler + Executor Flow</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #09090b;
+      color: #e4e4e7;
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      padding: 48px;
+      background-image:
+        linear-gradient(rgba(99,102,241,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(99,102,241,0.025) 1px, transparent 1px);
+      background-size: 32px 32px;
+    }
+    h1 {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 20px; font-weight: 700; color: white;
+      text-align: center; margin-bottom: 8px; letter-spacing: -0.02em;
+    }
+    .subtitle {
+      text-align: center; font-size: 13px; color: #52525b;
+      margin-bottom: 56px; font-family: 'JetBrains Mono', monospace;
+    }
+
+    .canvas {
+      max-width: 780px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+    }
+
+    /* ── Step node ── */
+    .step {
+      width: 560px;
+      border-radius: 12px;
+      border: 1px solid;
+      padding: 20px 24px;
+      position: relative;
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    .step-num {
+      width: 32px; height: 32px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px; font-weight: 700; flex-shrink: 0;
+    }
+    .step-body { flex: 1; min-width: 0; }
+    .step-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px; font-weight: 700; margin-bottom: 4px;
+    }
+    .step-desc { font-size: 12px; line-height: 1.6; color: #a1a1aa; }
+    .step-cmd {
+      margin-top: 8px; padding: 8px 12px;
+      border-radius: 6px; font-family: 'JetBrains Mono', monospace;
+      font-size: 11px; line-height: 1.5;
+    }
+
+    /* Variants */
+    .step-db {
+      background: rgba(20,184,166,0.04); border-color: rgba(20,184,166,0.15);
+    }
+    .step-db .step-num { background: rgba(20,184,166,0.12); color: #5eead4; }
+    .step-db .step-title { color: #5eead4; }
+
+    .step-build {
+      background: rgba(99,102,241,0.04); border-color: rgba(99,102,241,0.15);
+    }
+    .step-build .step-num { background: rgba(99,102,241,0.15); color: #a5b4fc; }
+    .step-build .step-title { color: #a5b4fc; }
+    .step-build .step-cmd { background: rgba(99,102,241,0.06); color: #a5b4fc; }
+
+    .step-sched {
+      background: rgba(245,158,11,0.04); border-color: rgba(245,158,11,0.2);
+      box-shadow: 0 0 24px -10px rgba(245,158,11,0.1);
+    }
+    .step-sched .step-num { background: rgba(245,158,11,0.15); color: #fbbf24; }
+    .step-sched .step-title { color: #fcd34d; }
+    .step-sched .step-cmd { background: rgba(245,158,11,0.06); color: #fbbf24; }
+
+    .step-docker {
+      background: rgba(14,165,233,0.04); border-color: rgba(14,165,233,0.2);
+      box-shadow: 0 0 30px -10px rgba(14,165,233,0.1);
+    }
+    .step-docker .step-num { background: rgba(14,165,233,0.15); color: #7dd3fc; }
+    .step-docker .step-title { color: #7dd3fc; }
+    .step-docker .step-cmd { background: rgba(14,165,233,0.06); color: #7dd3fc; }
+
+    .step-exec {
+      background: rgba(168,85,247,0.04); border-color: rgba(168,85,247,0.2);
+      box-shadow: 0 0 30px -10px rgba(168,85,247,0.12);
+    }
+    .step-exec .step-num { background: rgba(168,85,247,0.15); color: #c4b5fd; }
+    .step-exec .step-title { color: #c4b5fd; }
+    .step-exec .step-cmd { background: rgba(168,85,247,0.06); color: #c4b5fd; }
+
+    .step-collect {
+      background: rgba(34,197,94,0.04); border-color: rgba(34,197,94,0.15);
+    }
+    .step-collect .step-num { background: rgba(34,197,94,0.12); color: #4ade80; }
+    .step-collect .step-title { color: #86efac; }
+    .step-collect .step-cmd { background: rgba(34,197,94,0.06); color: #4ade80; }
+
+    .step-update {
+      background: rgba(236,72,153,0.04); border-color: rgba(236,72,153,0.15);
+    }
+    .step-update .step-num { background: rgba(236,72,153,0.12); color: #f9a8d4; }
+    .step-update .step-title { color: #f9a8d4; }
+    .step-update .step-cmd { background: rgba(236,72,153,0.06); color: #f9a8d4; }
+
+    /* ── Arrow connector ── */
+    .arrow {
+      display: flex; flex-direction: column; align-items: center;
+      height: 40px; justify-content: center; position: relative;
+    }
+
+    /* ── Decision ── */
+    .decision-wrapper {
+      display: flex; flex-direction: column; align-items: center;
+      position: relative; width: 560px;
+    }
+    .decision {
+      width: 300px; padding: 14px 20px;
+      border: 1px solid rgba(239,68,68,0.2);
+      background: rgba(239,68,68,0.04);
+      border-radius: 12px; text-align: center;
+    }
+    .decision-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px; font-weight: 700; color: #fca5a5; margin-bottom: 2px;
+    }
+    .decision-desc { font-size: 11px; color: #71717a; }
+
+    .decision-sched {
+      width: 300px; padding: 14px 20px;
+      border: 1px solid rgba(245,158,11,0.2);
+      background: rgba(245,158,11,0.04);
+      border-radius: 12px; text-align: center;
+    }
+    .decision-sched .decision-title { color: #fcd34d; }
+
+    .error-branch {
+      position: absolute; right: -200px; top: 50%; transform: translateY(-50%);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .error-line { width: 40px; height: 1.5px; background: rgba(239,68,68,0.3); }
+    .wait-line { width: 40px; height: 1.5px; background: rgba(245,158,11,0.3); }
+    .error-box {
+      padding: 10px 16px; border: 1px solid rgba(239,68,68,0.2);
+      background: rgba(239,68,68,0.05); border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace; font-size: 10px;
+      color: #fca5a5; white-space: nowrap;
+    }
+    .wait-box {
+      padding: 10px 16px; border: 1px solid rgba(245,158,11,0.2);
+      background: rgba(245,158,11,0.05); border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace; font-size: 10px;
+      color: #fbbf24; white-space: nowrap;
+    }
+    .error-dot {
+      width: 6px; height: 6px; border-radius: 50%; background: #ef4444;
+      position: absolute; left: -3px; top: 50%; transform: translateY(-50%);
+    }
+    .wait-dot {
+      width: 6px; height: 6px; border-radius: 50%; background: #f59e0b;
+      position: absolute; left: -3px; top: 50%; transform: translateY(-50%);
+    }
+
+    .arrow-label {
+      position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+      font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      padding: 2px 8px; border-radius: 4px;
+    }
+    .arrow-label-ok { background: rgba(34,197,94,0.1); color: #4ade80; }
+
+    /* ── Tags ── */
+    .io-tag {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 600;
+      padding: 2px 8px; border-radius: 4px;
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .io-in { background: rgba(99,102,241,0.1); color: #818cf8; }
+    .io-out { background: rgba(34,197,94,0.1); color: #4ade80; }
+    .io-file { background: rgba(245,158,11,0.1); color: #fbbf24; }
+    .io-docker { background: rgba(14,165,233,0.1); color: #38bdf8; }
+
+    /* ── Docker boundary ── */
+    .docker-boundary {
+      width: 580px; border: 1.5px solid rgba(14,165,233,0.2);
+      border-radius: 14px; padding: 16px; position: relative;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    .docker-boundary-label {
+      position: absolute; top: -8px; left: 20px;
+      font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.12em;
+      color: #0ea5e9; background: #09090b; padding: 0 8px;
+    }
+
+    /* ── Scheduler boundary ── */
+    .sched-boundary {
+      width: 600px; border: 1.5px dashed rgba(245,158,11,0.2);
+      border-radius: 16px; padding: 20px; position: relative;
+      display: flex; flex-direction: column; align-items: center;
+    }
+    .sched-boundary-label {
+      position: absolute; top: -8px; left: 20px;
+      font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.12em;
+      color: #f59e0b; background: #09090b; padding: 0 8px;
+    }
+
+    /* ── Markers ── */
+    .marker {
+      width: 560px; padding: 12px 24px; border-radius: 10px;
+      text-align: center; font-family: 'JetBrains Mono', monospace;
+      font-size: 11px; font-weight: 600;
+    }
+    .marker-start {
+      background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2); color: #a5b4fc;
+    }
+    .marker-end {
+      background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.2); color: #86efac;
+    }
+
+    /* ── Goroutine badge ── */
+    .goroutine-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-family: 'JetBrains Mono', monospace; font-size: 9px; font-weight: 600;
+      padding: 3px 10px; border-radius: 20px;
+      background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.15);
+      color: #fbbf24;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>&lt;/&gt; AutoDev — Scheduler + Executor Flow</h1>
+  <p class="subtitle">Poller → Scheduler.Enqueue() → goroutine Executor.Process()</p>
+
+  <div class="canvas">
+
+    <!-- ═══ START ═══ -->
+    <div class="marker marker-start">
+      <div style="margin-bottom: 4px;">Tickets détectés par le Poller</div>
+      <div style="display: flex; gap: 6px; justify-content: center; flex-wrap: wrap;">
+        <span class="io-in">in: []Generation (queued)</span>
+        <span class="io-in">in: Project configs</span>
+      </div>
+    </div>
+
+    <div class="arrow"></div>
+
+    <!-- ═══ SCHEDULER BOUNDARY ═══ -->
+    <div class="sched-boundary">
+      <div class="sched-boundary-label">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" style="vertical-align: -2px; margin-right: 4px;"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+        Scheduler — ordonnancement
+      </div>
+
+      <div style="height: 8px;"></div>
+
+      <!-- Step 1: Enqueue -->
+      <div class="step step-sched" style="width: 540px;">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-title">Enqueue les générations</div>
+          <div class="step-desc">
+            Chaque ticket détecté est ajouté à la file d'attente FIFO. La génération passe en <code style="color:#fbbf24;">status = queued</code>.
+          </div>
+          <div class="step-cmd">
+scheduler.Enqueue(gen) → append to queue
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow" style="height: 30px;"></div>
+
+      <!-- Decision: slot available? -->
+      <div class="decision-wrapper" style="width: 540px;">
+        <div class="decision-sched">
+          <div class="decision-title">Slot disponible ?</div>
+          <div class="decision-desc">sem &lt; max_concurrent && projet pas en cours</div>
+        </div>
+        <div class="error-branch">
+          <div class="wait-line"></div>
+          <div class="wait-box">
+            <div class="wait-dot"></div>
+            Attend un slot libre<br>
+            ou fin du container<br>
+            du même projet
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow" style="height: 30px;">
+        <div class="arrow-label arrow-label-ok">oui</div>
+      </div>
+
+      <!-- Step 2: Acquire + dispatch -->
+      <div class="step step-sched" style="width: 540px;">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-title">Acquire semaphore + dispatch</div>
+          <div class="step-desc">
+            Prend un slot du semaphore, marque le projet comme "running", lance une goroutine dédiée.
+          </div>
+          <div class="step-cmd">
+sem &lt;- struct{}{}       // acquire slot<br>
+running[project.ID] = true<br>
+go func() {<br>
+&nbsp;&nbsp;defer release()       // libère slot + marque projet idle<br>
+&nbsp;&nbsp;executor.Process(ctx, gen)<br>
+&nbsp;&nbsp;scheduler.processNext(project.ID)  // lance le prochain ticket du même projet<br>
+}()
+          </div>
+          <div style="margin-top: 8px;">
+            <span class="goroutine-badge">goroutine par exécution</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="height: 8px;"></div>
+    </div>
+
+    <div class="arrow"></div>
+
+    <!-- ═══ EXECUTOR: Step 3 — Mark running ═══ -->
+    <div class="step step-db">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <div class="step-title">Marquer "running"</div>
+        <div class="step-desc">
+          Met à jour la génération en base : <code style="color:#5eead4;">status = running</code>, <code style="color:#5eead4;">started_at = now()</code>
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow"></div>
+
+    <!-- Step 4: Build prompt -->
+    <div class="step step-build">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <div class="step-title">Construire le prompt</div>
+        <div class="step-desc">
+          Assemble context.md + skills + ticket. Écrit <code style="color:#a5b4fc;">prompt.md</code> dans un dossier temporaire.
+        </div>
+        <div style="margin-top: 10px; display: flex; flex-direction: column; gap: 6px;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span class="io-file">fichier</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #71717a;">contexts/{project}.md</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span class="io-file">fichier</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #71717a;">skills/{skill}.md</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span class="io-in">api</span>
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #71717a;">ticket.description</span>
+          </div>
+        </div>
+        <div style="margin-top: 8px;">
+          <span class="io-out">out: /tmp/gen-{id}/prompt.md</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow"></div>
+
+    <!-- Step 5: Create Docker container -->
+    <div class="step step-docker">
+      <div class="step-num">5</div>
+      <div class="step-body">
+        <div class="step-title">Créer le container Docker</div>
+        <div class="step-desc">
+          Via Docker SDK : container éphémère avec l'image stack du projet. Monte workspace, prompt, output.
+        </div>
+        <div class="step-cmd">
+docker.ContainerCreate(ctx, &Config{<br>
+&nbsp;&nbsp;Image: project.DockerImage,<br>
+&nbsp;&nbsp;Cmd: ["autodev-exec", branch, ticket, prompt],<br>
+&nbsp;&nbsp;Env: [ANTHROPIC_API_KEY, GITHUB_TOKEN, ...],<br>
+}, &HostConfig{<br>
+&nbsp;&nbsp;Binds: [workspace, prompt.md:ro, output]<br>
+})
+        </div>
+        <div style="margin-top: 8px; display: flex; gap: 6px;">
+          <span class="io-docker">image: autodev-{stack}:latest</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow"></div>
+
+    <!-- Step 6: Start & Wait -->
+    <div class="step step-docker">
+      <div class="step-num">6</div>
+      <div class="step-body">
+        <div class="step-title">Démarrer et attendre</div>
+        <div class="step-desc">
+          Démarre le container. La goroutine attend la fin (blocking). Le container exécute <code style="color:#7dd3fc;">autodev-exec.sh</code>.
+        </div>
+        <div class="step-cmd">
+docker.ContainerStart(ctx, containerID)<br>
+statusCh, errCh := docker.ContainerWait(ctx, containerID)
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow"></div>
+
+    <!-- ═══ DOCKER BOUNDARY ═══ -->
+    <div class="docker-boundary">
+      <div class="docker-boundary-label">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round" style="vertical-align: -2px; margin-right: 4px;"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><polyline points="17 2 12 7 7 2"></polyline></svg>
+        autodev-exec.sh (dans le container)
+      </div>
+
+      <div style="height: 12px;"></div>
+
+      <div class="step step-exec" style="width: 520px; border-color: rgba(168,85,247,0.15);">
+        <div class="step-num" style="background: rgba(168,85,247,0.1); color: #c4b5fd; font-size: 10px; width: 26px; height: 26px;">a</div>
+        <div class="step-body">
+          <div class="step-title">Git checkout + branch</div>
+          <div class="step-cmd">
+cd /workspace && git checkout main && git pull<br>
+git checkout -b "$BRANCH_NAME"
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow" style="height: 20px;"></div>
+
+      <div class="step step-exec" style="width: 520px; border-color: rgba(168,85,247,0.25); box-shadow: 0 0 30px -8px rgba(168,85,247,0.15);">
+        <div class="step-num" style="background: rgba(168,85,247,0.1); color: #c4b5fd; font-size: 10px; width: 26px; height: 26px;">b</div>
+        <div class="step-body">
+          <div class="step-title">Claude Code CLI</div>
+          <div class="step-cmd">
+claude -p "$(cat $PROMPT_FILE)" \<br>
+&nbsp;&nbsp;--model "$CLAUDE_MODEL" --max-turns "$CLAUDE_MAX_TURNS" \<br>
+&nbsp;&nbsp;--allowedTools bash,write,read,edit \<br>
+&nbsp;&nbsp;--output-format json > /output/claude_result.json
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow" style="height: 20px;"></div>
+
+      <div class="step step-exec" style="width: 520px; border-color: rgba(168,85,247,0.15);">
+        <div class="step-num" style="background: rgba(168,85,247,0.1); color: #c4b5fd; font-size: 10px; width: 26px; height: 26px;">c</div>
+        <div class="step-body">
+          <div class="step-title">Commit + Push + PR</div>
+          <div class="step-cmd">
+git add -A && git commit -m "feat($TICKET): $TITLE"<br>
+git push -u origin "$BRANCH"<br>
+gh pr create --title "..." --body-file /output/pr_body.md \<br>
+&nbsp;&nbsp;> /output/pr_url.txt
+          </div>
+        </div>
+      </div>
+
+      <div style="height: 8px;"></div>
+    </div>
+
+    <div class="arrow"></div>
+
+    <!-- Decision: exit code -->
+    <div class="decision-wrapper">
+      <div class="decision">
+        <div class="decision-title">exit_code == 0 ?</div>
+        <div class="decision-desc">Le container a terminé sans erreur</div>
+      </div>
+      <div class="error-branch">
+        <div class="error-line"></div>
+        <div class="error-box">
+          <div class="error-dot"></div>
+          status = failed<br>
+          Lire /output/ + container logs<br>
+          → release slot → processNext
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow">
+      <div class="arrow-label arrow-label-ok">ok</div>
+    </div>
+
+    <!-- Step 7: Collect results -->
+    <div class="step step-collect">
+      <div class="step-num">7</div>
+      <div class="step-body">
+        <div class="step-title">Collecter les résultats</div>
+        <div class="step-desc">
+          Lit les fichiers de sortie montés dans /output/.
+        </div>
+        <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #4ade80;">
+          <span>/output/claude_result.json → claude_output</span>
+          <span>/output/pr_url.txt → pr_url</span>
+          <span>docker.ContainerLogs() → full logs</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow"></div>
+
+    <!-- Step 8: Remove container -->
+    <div class="step step-docker">
+      <div class="step-num">8</div>
+      <div class="step-body">
+        <div class="step-title">Supprimer le container</div>
+        <div class="step-desc">Container éphémère nettoyé. Le workspace reste sur l'hôte.</div>
+        <div class="step-cmd">
+docker.ContainerRemove(ctx, containerID, RemoveOptions{Force: true})
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow"></div>
+
+    <!-- Step 9: Update ProdPlanner -->
+    <div class="step step-update">
+      <div class="step-num">9</div>
+      <div class="step-body">
+        <div class="step-title">Mettre à jour ProdPlanner</div>
+        <div class="step-desc">Déplace le ticket vers "À déployer".</div>
+        <div class="step-cmd">
+POST /api/tickets/{id}/move → column "À déployer"
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow"></div>
+
+    <!-- Step 10: Save to DB -->
+    <div class="step step-db">
+      <div class="step-num" style="font-size: 11px;">10</div>
+      <div class="step-body">
+        <div class="step-title">Sauvegarder la génération</div>
+        <div style="margin-top: 4px; display: flex; flex-direction: column; gap: 4px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #5eead4;">
+          <span>status = completed</span>
+          <span>pr_url, branch_name, prompt_sent, claude_output</span>
+          <span>duration_seconds, completed_at = now()</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow"></div>
+
+    <!-- Step 11: Release + next -->
+    <div class="step step-sched" style="border-style: dashed;">
+      <div class="step-num" style="font-size: 11px;">11</div>
+      <div class="step-body">
+        <div class="step-title">Release slot + processNext</div>
+        <div class="step-desc">
+          Libère le slot du semaphore, marque le projet comme idle. Si d'autres tickets du même projet sont en queue, lance le suivant.
+        </div>
+        <div class="step-cmd">
+&lt;-sem                    // release slot<br>
+delete(running, project.ID)<br>
+scheduler.processNext(project.ID)  // FIFO du même projet
+        </div>
+      </div>
+    </div>
+
+    <div class="arrow"></div>
+
+    <!-- END -->
+    <div class="marker marker-end">
+      <div style="margin-bottom: 4px;">Génération terminée — goroutine se ferme</div>
+      <div style="display: flex; gap: 6px; justify-content: center; flex-wrap: wrap;">
+        <span class="io-out">PR créée sur GitHub</span>
+        <span class="io-out">Ticket déplacé</span>
+        <span class="io-out">Slot libéré pour le suivant</span>
+      </div>
+    </div>
+
+    <div style="height: 32px;"></div>
+
+  </div>
+
+</body>
+</html>
