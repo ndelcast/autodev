@@ -9,6 +9,7 @@ PROMPT_FILE="$4"
 cd /workspace
 
 # 1. Git prep
+git config --global safe.directory /workspace
 git config user.name "AutoDev"
 git config user.email "autodev@outlined.io"
 
