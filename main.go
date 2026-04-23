@@ -128,7 +128,7 @@ func cmdServe(ctx context.Context, cfg *config.Config, logBuffer *web.LogBuffer)
 	go poll.Start(ctx)
 
 	// Web dashboard
-	dashboard, err := web.New(s, poll, logBuffer, cfg.WebPort)
+	dashboard, err := web.New(s, poll, sched, logBuffer, cfg.WebPort)
 	if err != nil {
 		slog.Error("creating dashboard", "error", err)
 		os.Exit(1)

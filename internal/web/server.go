@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/outlined/autodev/internal/poller"
+	"github.com/outlined/autodev/internal/scheduler"
 	"github.com/outlined/autodev/internal/store"
 )
 
@@ -18,6 +19,7 @@ var templateFS embed.FS
 type Server struct {
 	store     *store.Store
 	poller    *poller.Poller
+	scheduler *scheduler.Scheduler
 	logBuffer *LogBuffer
 	pages     map[string]*template.Template
 	port      int
@@ -29,7 +31,7 @@ var funcMap = template.FuncMap{
 }
 
 // New creates a new web server.
-func New(s *store.Store, p *poller.Poller, logBuf *LogBuffer, port int) (*Server, error) {
+func New(s *store.Store, p *poller.Poller, sched *scheduler.Scheduler, logBuf *LogBuffer, port int) (*Server, error) {
 	// Parse each page template independently so they can each define
 	// their own "content" and "title" blocks without conflicting.
 	pages := map[string]*template.Template{}
@@ -65,6 +67,7 @@ func New(s *store.Store, p *poller.Poller, logBuf *LogBuffer, port int) (*Server
 	return &Server{
 		store:     s,
 		poller:    p,
+		scheduler: sched,
 		logBuffer: logBuf,
 		pages:     pages,
 		port:      port,

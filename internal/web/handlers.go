@@ -224,6 +224,11 @@ func (s *Server) handleRetryGeneration(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("generation queued for retry via dashboard", "id", gen.ID, "attempt", gen.Attempt)
 
+	// Enqueue in scheduler so it actually runs
+	if s.scheduler != nil {
+		s.scheduler.Enqueue(gen)
+	}
+
 	// Redirect back
 	http.Redirect(w, r, "/projects/"+strconv.FormatInt(gen.ProjectID, 10), http.StatusSeeOther)
 }
