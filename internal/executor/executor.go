@@ -95,6 +95,7 @@ func (e *Executor) Process(ctx context.Context, gen *store.Generation) error {
 
 	outputDir := filepath.Join(tmpDir, "output")
 	os.MkdirAll(outputDir, 0777)
+	os.Chmod(outputDir, 0777)
 
 	// Write prompt file
 	promptFile := filepath.Join(tmpDir, "prompt.md")
