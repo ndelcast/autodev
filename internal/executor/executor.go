@@ -94,7 +94,7 @@ func (e *Executor) Process(ctx context.Context, gen *store.Generation) error {
 	defer os.RemoveAll(tmpDir)
 
 	outputDir := filepath.Join(tmpDir, "output")
-	os.MkdirAll(outputDir, 0755)
+	os.MkdirAll(outputDir, 0777)
 
 	// Write prompt file
 	promptFile := filepath.Join(tmpDir, "prompt.md")
