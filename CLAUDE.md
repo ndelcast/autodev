@@ -6,7 +6,7 @@ Go-based orchestrator that polls ProdPlanner for tickets, launches ephemeral Doc
 
 ## Tech Stack
 
-- Go 1.23+ (binary at `/opt/homebrew/bin/go`)
+- Go 1.26+ (binary at `/opt/homebrew/bin/go`)
 - SQLite via `modernc.org/sqlite` (pure Go, no CGO)
 - Docker SDK (`github.com/docker/docker`)
 - YAML config (`gopkg.in/yaml.v3`)
