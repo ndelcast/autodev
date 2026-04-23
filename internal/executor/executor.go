@@ -265,6 +265,12 @@ func (e *Executor) ensureWorkspace(project *store.Project) (string, error) {
 		if err := cmd.Run(); err != nil {
 			return "", fmt.Errorf("cloning %s: %s", project.GithubRepo, stderr.String())
 		}
+
+		// Make workspace writable by container's non-root user
+		chmodCmd := exec.Command("chmod", "-R", "a+rwX", workspacePath)
+		if err := chmodCmd.Run(); err != nil {
+			e.logger.Warn("failed to chmod workspace", "error", err)
+		}
 	}
 
 	return workspacePath, nil
