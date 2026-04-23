@@ -5,7 +5,7 @@ prodplanner:
 
 claude:
   model: "sonnet"
-  max_turns: 30
+  max_turns: 50
   timeout: "10m"
 
 polling:

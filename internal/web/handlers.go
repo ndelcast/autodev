@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -45,6 +46,14 @@ type generationRow struct {
 	ErrorMessage    string
 	PromptSent      string
 	ClaudeOutput    string
+
+	// Parsed from ClaudeOutput JSON
+	ClaudeResult    string
+	ClaudeCostUSD   string
+	ClaudeTurns     int
+	ClaudeStopReason string
+	ClaudeDuration  string
+	ClaudeModel     string
 }
 
 func (s *Server) handleProjects(w http.ResponseWriter, r *http.Request) {
@@ -468,7 +477,7 @@ func atoi(s string) int {
 }
 
 func toGenerationRow(g store.Generation) generationRow {
-	return generationRow{
+	row := generationRow{
 		ID:              g.ID,
 		TicketNumber:    g.TicketNumber,
 		TicketTitle:     g.TicketTitle,
@@ -481,4 +490,32 @@ func toGenerationRow(g store.Generation) generationRow {
 		PromptSent:      g.PromptSent,
 		ClaudeOutput:    g.ClaudeOutput,
 	}
+
+	// Parse Claude output JSON for summary display
+	if g.ClaudeOutput != "" {
+		var parsed struct {
+			Result       string  `json:"result"`
+			NumTurns     int     `json:"num_turns"`
+			StopReason   string  `json:"stop_reason"`
+			Subtype      string  `json:"subtype"`
+			DurationMS   int     `json:"duration_ms"`
+			TotalCostUSD float64 `json:"total_cost_usd"`
+		}
+		if err := json.Unmarshal([]byte(g.ClaudeOutput), &parsed); err == nil {
+			row.ClaudeTurns = parsed.NumTurns
+			row.ClaudeCostUSD = fmt.Sprintf("%.2f", parsed.TotalCostUSD)
+			row.ClaudeStopReason = parsed.Subtype
+			if row.ClaudeStopReason == "" {
+				row.ClaudeStopReason = parsed.StopReason
+			}
+			if parsed.DurationMS > 0 {
+				mins := parsed.DurationMS / 60000
+				secs := (parsed.DurationMS % 60000) / 1000
+				row.ClaudeDuration = fmt.Sprintf("%dm%02ds", mins, secs)
+			}
+			row.ClaudeResult = parsed.Result
+		}
+	}
+
+	return row
 }

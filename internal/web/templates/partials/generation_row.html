@@ -23,7 +23,10 @@
     {{end}}
   </td>
   <td class="px-5 py-3 text-center font-mono text-xs text-zinc-400">
-    {{if gt .DurationSeconds 0}}{{.DurationSeconds}}s{{else}}—{{end}}
+    {{if .ClaudeDuration}}{{.ClaudeDuration}}{{else if gt .DurationSeconds 0}}{{.DurationSeconds}}s{{else}}—{{end}}
+  </td>
+  <td class="px-5 py-3 text-center font-mono text-xs text-zinc-400">
+    {{if .ClaudeCostUSD}}<span title="Coût API">${{.ClaudeCostUSD}}</span>{{else}}—{{end}}
   </td>
   <td class="px-5 py-3 text-center font-mono text-xs text-zinc-400">
     {{.Attempt}}
@@ -43,7 +46,7 @@
   </td>
 </tr>
 <tr>
-  <td colspan="7" class="px-0 py-0">
+  <td colspan="8" class="px-0 py-0">
     <div id="logs-{{.ID}}" class="gen-logs-panel" data-gen-id="{{.ID}}"></div>
   </td>
 </tr>
@@ -60,15 +63,46 @@
   {{end}}
   {{if .ClaudeOutput}}
   <div class="mb-3">
-    <div class="text-xs font-mono text-zinc-500 uppercase tracking-wider mb-1">Sortie Claude</div>
-    <pre class="text-xs text-zinc-400 bg-surface-2 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap font-mono max-h-64 overflow-y-auto">{{.ClaudeOutput}}</pre>
+    <div class="text-xs font-mono text-zinc-500 uppercase tracking-wider mb-1">Résumé Claude</div>
+    <div class="bg-surface-2 rounded-lg p-4">
+      {{if gt .ClaudeTurns 0}}
+      <div class="flex flex-wrap gap-4 mb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-zinc-500">Turns</span>
+          <span class="font-mono text-sm text-zinc-300">{{.ClaudeTurns}}</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-zinc-500">Coût</span>
+          <span class="font-mono text-sm text-zinc-300">${{.ClaudeCostUSD}}</span>
+        </div>
+        {{if .ClaudeDuration}}
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-zinc-500">Durée</span>
+          <span class="font-mono text-sm text-zinc-300">{{.ClaudeDuration}}</span>
+        </div>
+        {{end}}
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-zinc-500">Raison d'arrêt</span>
+          <span class="font-mono text-sm {{if eq .ClaudeStopReason "success"}}text-green-400{{else}}text-amber-400{{end}}">{{.ClaudeStopReason}}</span>
+        </div>
+      </div>
+      {{end}}
+      {{if .ClaudeResult}}
+      <div class="text-xs font-mono text-zinc-500 uppercase tracking-wider mb-1">Résultat</div>
+      <pre class="text-xs text-zinc-400 bg-surface-1 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap font-mono max-h-64 overflow-y-auto">{{.ClaudeResult}}</pre>
+      {{end}}
+    </div>
   </div>
+  <details class="mb-3">
+    <summary class="text-xs font-mono text-zinc-600 cursor-pointer hover:text-zinc-400">JSON brut</summary>
+    <pre class="text-xs text-zinc-500 bg-surface-2 rounded-lg p-3 mt-2 overflow-x-auto whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">{{.ClaudeOutput}}</pre>
+  </details>
   {{end}}
   {{if .PromptSent}}
-  <div>
-    <div class="text-xs font-mono text-zinc-500 uppercase tracking-wider mb-1">Prompt envoyé</div>
-    <pre class="text-xs text-zinc-400 bg-surface-2 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">{{.PromptSent}}</pre>
-  </div>
+  <details>
+    <summary class="text-xs font-mono text-zinc-600 cursor-pointer hover:text-zinc-400">Prompt envoyé</summary>
+    <pre class="text-xs text-zinc-400 bg-surface-2 rounded-lg p-3 mt-2 overflow-x-auto whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">{{.PromptSent}}</pre>
+  </details>
   {{end}}
   {{if and (not .ErrorMessage) (not .ClaudeOutput) (not .PromptSent)}}
   <div class="text-xs text-zinc-500">Aucun log disponible.</div>
